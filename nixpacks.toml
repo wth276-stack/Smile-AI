@@ -1,2 +1,8 @@
 ﻿[phases.install]
 cmds = ["npm install -g pnpm@9.15.4", "pnpm install --frozen-lockfile"]
+
+[phases.build]
+cmds = ["pnpm --filter @ats/api build"]
+
+[start]
+cmd = "pnpm --filter @ats/api start:prod"
