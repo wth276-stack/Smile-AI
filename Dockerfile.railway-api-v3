@@ -19,7 +19,7 @@ RUN echo "RAILWAY_V3_UNIQUE_MARKER"
 
 COPY . .
 
-RUN pnpm --filter @ats/database exec prisma generate --schema=packages/database/prisma/schema.prisma
+RUN pnpm --filter @ats/database generate
 RUN pnpm --filter @ats/shared build
 RUN pnpm --filter @ats/database build
 RUN pnpm --filter @ats/ai-engine build
