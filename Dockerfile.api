@@ -1,0 +1,35 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install pnpm
+RUN npm install -g pnpm@9.15.4
+
+# Copy workspace config files (layer cache 優化)
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json ./
+
+# Copy 所有 package.json（讓 pnpm 解析 workspace）
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+COPY apps/worker/package.json ./apps/worker/
+COPY packages/database/package.json ./packages/database/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/ai-engine/package.json ./packages/ai-engine/
+COPY packages/channel-adapters/package.json ./packages/channel-adapters/
+COPY config/ ./config/
+
+# Install all dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy 所有 source code
+COPY . .
+
+# Generate Prisma client
+RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
+
+# Build API
+RUN pnpm --filter @ats/api build
+
+EXPOSE 3001
+
+CMD ["node", "apps/api/dist/main.js"]
