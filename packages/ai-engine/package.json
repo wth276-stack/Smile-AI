@@ -1,0 +1,25 @@
+{
+  "name": "@ats/ai-engine",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:regression": "node -e \"(async()=>{const v=require('./dist/llm-validate.js');const r=require('./dist/llm-regression.js');const s=require('./dist/llm-semantic-check.js');const o=require('./dist/orchestrator.js');const i=require('./dist/intent-classifier.js');const b=require('./dist/booking-state.js');const h=require('./dist/service-detail-handler.js');const vb=require('./dist/service-detail-verbalizer.js');const p1c=require('./dist/unknown-response-policy.js');const p1d=require('./dist/booking-transition-policy.js');const p1e=require('./dist/booking-conversation-policy.js');const rc=require('./dist/response-composer.js');const lf1=require('./dist/llm-first-regression.js');const x={v:v.verifyLlmValidationRegression(),m:r.verifyLlmMergeRegression(),sem:s.verifyLlmSemanticRegression(),ctx:o.verifyServiceContextRegression(),man:o.verifyManualChatRoutingRegression(),intent:i.verifyIntentRegression(),draft:i.verifyIntentDraftContextRegression(),book:b.verifyBookingDateTimeRegression(),phase1:await o.verifyPhase1ReliabilityRegression(),p1aRoute:o.verifyPhase1AFaqAndSalonNotServiceDetailPath(),p1aFacts:h.verifyAnswerPlanFactsSurfaceInReply(),p1aDe:await o.verifyPhase1AServiceDetailNoDecisionEngineSignals(),p1bVerb:vb.verifyServiceDetailVerbalizationRegression(),p1cPolicy:p1c.verifyUnknownResponsePolicyRegression(),p1dTrans:p1d.verifyBookingTransitionPolicyRegression(),p1eBook:p1e.verifyBookingConversationPolicyRegression(),p1ePack:o.verifyPhase1EAcceptancePack(),lf1Proto:await lf1.verifyLlmFirstPrototypeRegression(),bookFlow:rc.verifyBookingFlowRegression(),respQual:rc.verifyResponseQualityRegression()};console.log(JSON.stringify(x,null,2));process.exit(Object.values(x).every(y=>y.ok)?0:1);})().catch(err=>{console.error(err);process.exit(1);});\""
+  },
+  "dependencies": {
+    "@ats/shared": "workspace:*",
+    "mammoth": "^1.12.0",
+    "openai": "^4.85.4",
+    "pdf-parse": "^2.4.5"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.2"
+  }
+}

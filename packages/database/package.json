@@ -1,0 +1,27 @@
+{
+  "name": "@ats/database",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf dist",
+    "generate": "prisma generate",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "db:push": "prisma db push",
+    "studio": "prisma studio",
+    "seed:demo": "npx tsx prisma/seed-demo.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.4.1",
+    "bcrypt": "^5.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "prisma": "^6.4.1",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.3"
+  }
+}

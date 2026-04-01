@@ -1,0 +1,501 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  ENUMS — all phases defined upfront to avoid ALTER TYPE     ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+enum UserRole {
+  OWNER
+  ADMIN
+  STAFF
+}
+
+enum ChannelType {
+  WHATSAPP
+  INSTAGRAM
+  FACEBOOK
+  WEBCHAT
+  EMAIL // P2
+}
+
+enum ConversationStatus {
+  OPEN
+  CLOSED
+  ARCHIVED
+  HANDED_OFF // P2
+}
+
+enum MessageSender {
+  CUSTOMER
+  AI
+  HUMAN
+}
+
+enum MessageContentType {
+  TEXT
+  IMAGE
+  FILE
+  LOCATION
+  TEMPLATE
+}
+
+enum OrderStatus {
+  DRAFT
+  CONFIRMED
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  NO_SHOW
+  CANCELLED
+}
+
+enum FollowUpStatus {
+  PENDING
+  DONE
+  SKIPPED
+  OVERDUE
+}
+
+enum FollowUpType {
+  DELIVERY_REMINDER
+  APPOINTMENT_REMINDER
+  PAYMENT_FOLLOW_UP
+  GENERAL_FOLLOW_UP
+  RE_ENGAGEMENT // P2
+}
+
+enum ReminderTarget {
+  OWNER
+  CUSTOMER
+}
+
+enum ReminderStatus {
+  SCHEDULED
+  SENT
+  CANCELLED
+}
+
+enum AiRunStatus {
+  SUCCESS
+  ERROR
+  TIMEOUT
+  FILTERED
+}
+
+enum DocType {
+  SERVICE
+  FAQ
+  GENERAL
+}
+
+// P2 enums — defined now, used later
+enum LeadStage {
+  NEW
+  ENGAGING
+  QUALIFYING
+  QUOTING
+  NEGOTIATING
+  CLOSING
+  WON
+  LOST
+  DORMANT
+}
+
+enum HandoffReason {
+  CUSTOMER_REQUEST
+  COMPLEX_QUERY
+  HIGH_VALUE_DEAL
+  COMPLAINT
+  AI_UNSURE
+  REPEATED_OBJECTION
+}
+
+enum ObjectionType {
+  PRICE
+  TIMING
+  NEED
+  TRUST
+  COMPETITOR
+  AUTHORITY
+}
+
+// P3 enums
+enum DecisionStyle {
+  ANALYTICAL
+  DRIVER
+  EXPRESSIVE
+  AMIABLE
+}
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  PHASE 1 MODELS                                            ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  plan      String   @default("STARTER") // STARTER | GROWTH | ELITE
+  domain    String?  @unique
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users         User[]
+  contacts      Contact[]
+  conversations Conversation[]
+  orders        Order[]
+  bookings      Booking[]
+  followUpTasks FollowUpTask[]
+  reminders     Reminder[]
+  aiRuns        AiRun[]
+  knowledgeDocs KnowledgeDocument[]
+  channelConfigs ChannelConfig[]
+
+  @@map("tenants")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String
+  email        String
+  passwordHash String
+  name         String
+  role         UserRole @default(STAFF)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  reminders Reminder[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("users")
+}
+
+model Contact {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String?
+  phone       String?
+  email       String?
+  externalIds Json     @default("{}") // { whatsapp: "...", ig: "..." }
+  tags        String[] @default([])
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // P2 fields — nullable, added later
+  leadStage  LeadStage? // P2
+  leadScore  Int?       // P2
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  conversations Conversation[]
+  orders        Order[]
+  bookings      Booking[]
+  followUpTasks FollowUpTask[]
+
+  @@index([tenantId])
+  @@index([tenantId, phone])
+  @@unique([tenantId, phone])
+  @@index([tenantId, email])
+  @@map("contacts")
+}
+
+model Conversation {
+  id         String             @id @default(cuid())
+  tenantId   String
+  contactId  String
+  channel    ChannelType
+  status     ConversationStatus @default(OPEN)
+  externalId String?            // channel-specific thread ID
+  summary    String?            // P2: AI-generated summary
+  metadata   Json               @default("{}")
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  closedAt   DateTime?
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  contact  Contact   @relation(fields: [contactId], references: [id])
+  messages Message[]
+  aiRuns   AiRun[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([contactId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String             @id @default(cuid())
+  conversationId String
+  sender         MessageSender
+  contentType    MessageContentType @default(TEXT)
+  content        String
+  metadata       Json               @default("{}") // media URLs, template params, etc.
+  createdAt      DateTime           @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId])
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model Order {
+  id        String      @id @default(cuid())
+  tenantId  String
+  contactId String
+  status    OrderStatus @default(DRAFT)
+  items     Json        @default("[]") // P1 simplification: [{name, qty, unitPrice}]
+  total     Decimal     @db.Decimal(10, 2)
+  currency  String      @default("HKD")
+  notes     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  contact Contact @relation(fields: [contactId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([contactId])
+  @@map("orders")
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  tenantId       String
+  contactId      String
+  status         BookingStatus @default(PENDING)
+  serviceName    String
+  startTime      DateTime
+  endTime        DateTime?
+  notes          String?
+  /// SHA-256 hex from tenant+contact+service+startTime(ms); unique so AI retries cannot duplicate rows
+  idempotencyKey String?       @unique @map("idempotency_key")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  contact Contact @relation(fields: [contactId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, startTime])
+  @@index([contactId])
+  @@map("bookings")
+}
+
+model FollowUpTask {
+  id        String       @id @default(cuid())
+  tenantId  String
+  contactId String
+  type      FollowUpType
+  status    FollowUpStatus @default(PENDING)
+  dueAt     DateTime
+  title     String
+  notes     String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  contact Contact @relation(fields: [contactId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, dueAt])
+  @@map("follow_up_tasks")
+}
+
+model Reminder {
+  id        String         @id @default(cuid())
+  tenantId  String
+  userId    String
+  target    ReminderTarget
+  status    ReminderStatus @default(SCHEDULED)
+  title     String
+  body      String?
+  sendAt    DateTime
+  sentAt    DateTime?
+  createdAt DateTime       @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, sendAt])
+  @@map("reminders")
+}
+
+model AiRun {
+  id                  String      @id @default(cuid())
+  tenantId            String
+  conversationId      String
+  status              AiRunStatus
+  model               String      // e.g. "gpt-4o-mini"
+  inputTokens         Int         @default(0)
+  outputTokens        Int         @default(0)
+  durationMs          Int         @default(0)
+  signals             Json        @default("{}") // detected intents, objections, etc.
+  sideEffects         Json        @default("[]") // CRM actions taken
+  /// Failed side effects (type + message) for audit when execution partially fails
+  sideEffectFailures  Json?       @map("side_effect_failures")
+  error               String?
+  createdAt           DateTime    @default(now())
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+
+  @@index([tenantId])
+  @@index([conversationId])
+  @@index([tenantId, createdAt])
+  @@map("ai_runs")
+}
+
+model KnowledgeDocument {
+  id        String   @id @default(cuid())
+  tenantId  String
+  title     String
+
+  // Document type for differentiated handling
+  docType   DocType  @default(GENERAL)
+
+  // Structured fields for service details (Phase 1.5C)
+  // These allow precise section-aware retrieval
+  effect      String?  // 功效
+  suitable    String?  // 適合對象
+  unsuitable  String?  // 不適合對象
+  precaution  String?  // 注意事項
+  duration    String?  // 時長
+
+  // Pricing fields
+  price         String?  // 價錢
+  discountPrice String?  // 優惠價
+
+  // Steps - array of step descriptions
+  steps      String[]  @default([])
+
+  // FAQ items - array of {question, answer}
+  faqItems   Json?    @map("faq_items")
+
+  // Service aliases for matching (e.g., ["facial", "清潔facial", "深層清潔"])
+  aliases   String[] @default([])
+
+  // Legacy/free-text field (backward compatible)
+  content   String
+
+  category  String?
+  tags      String[] @default([])
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, category])
+  @@map("knowledge_documents")
+}
+
+model ChannelConfig {
+  id         String      @id @default(cuid())
+  tenantId   String
+  channel    ChannelType
+  isActive   Boolean     @default(false)
+  credentials Json       @default("{}") // encrypted API keys, tokens
+  webhookUrl String?
+  settings   Json        @default("{}") // channel-specific settings
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, channel])
+  @@index([tenantId])
+  @@map("channel_configs")
+}
+
+model BusinessHours {
+  id           String   @id @default(cuid())
+  tenantId     String
+  dayOfWeek    Int      // 0=Sunday, 1=Monday, ... 6=Saturday
+  openTime     String   // "10:00"
+  closeTime    String   // "20:00"
+  isClosed     Boolean  @default(false)
+  slotDuration Int      @default(60)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tenantId, dayOfWeek])
+  @@map("business_hours")
+}
+
+model TimeSlot {
+  id          String   @id @default(cuid())
+  tenantId    String
+  date        DateTime
+  startTime   DateTime
+  endTime     DateTime
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, date])
+  @@index([tenantId, date, isAvailable])
+  @@map("time_slots")
+}
+
+model MediaMessage {
+  id          String   @id @default(cuid())
+  tenantId    String
+  messageId   String?
+  channel     String
+  mediaType   String
+  mimeType    String?
+  originalUrl String?
+  localPath   String?
+  fileName    String?
+  fileSize    Int?
+  width       Int?
+  height      Int?
+  aiAnalysis  String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([messageId])
+  @@map("media_messages")
+}
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  PHASE 2 MODELS — uncomment when ready                     ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+// model Playbook { ... }
+// model HandoffLog { ... }
+// model ObjectionEvent { ... }
+// model LeadScore { ... }
+// model ScoringRule { ... }
+// model SalesAction { ... }
+// model ConversationSummary { ... }
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  PHASE 3 MODELS — uncomment when ready                     ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+// model DecisionIdentityProfile { ... }
+// model UpsellRule { ... }

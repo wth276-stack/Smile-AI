@@ -1,0 +1,35 @@
+{
+  "name": "ai-top-sales",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "dev:api": "turbo dev --filter=@ats/api",
+    "dev:web": "turbo dev --filter=@ats/web",
+    "preview:web": "pnpm --filter @ats/web build && pnpm --filter @ats/web start",
+    "dev:worker": "turbo dev --filter=@ats/worker",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "db:generate": "pnpm --filter @ats/database exec prisma generate",
+    "db:migrate": "pnpm --filter @ats/database exec prisma migrate dev",
+    "db:migrate:prod": "pnpm --filter @ats/database exec prisma migrate deploy",
+    "db:push": "pnpm --filter @ats/database exec prisma db push",
+    "db:studio": "pnpm --filter @ats/database exec prisma studio",
+    "db:seed": "pnpm --filter @ats/database exec npx tsx prisma/seed.ts",
+    "db:seed:demo": "pnpm --filter @ats/database exec npx tsx prisma/seed-demo.ts",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:clean": "docker compose down -v",
+    "clean": "turbo clean && rimraf node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "prettier": "^3.5.3",
+    "rimraf": "^6.0.1",
+    "turbo": "^2.4.4"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

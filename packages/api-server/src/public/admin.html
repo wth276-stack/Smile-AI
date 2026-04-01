@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Top Sales — Admin Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #333; }
+
+    /* NAV */
+    .nav { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; gap: 24px; }
+    .nav h1 { font-size: 20px; font-weight: 700; }
+    .nav-links { display: flex; gap: 8px; }
+    .nav-links button { background: rgba(255,255,255,0.1); color: #fff; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; transition: background 0.2s; }
+    .nav-links button:hover, .nav-links button.active { background: rgba(255,255,255,0.25); }
+
+    /* LAYOUT */
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* STATS CARDS */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .stat-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .stat-card .label { font-size: 13px; color: #888; margin-bottom: 4px; }
+    .stat-card .value { font-size: 28px; font-weight: 700; }
+    .stat-card.blue .value { color: #2563eb; }
+    .stat-card.green .value { color: #16a34a; }
+    .stat-card.orange .value { color: #ea580c; }
+    .stat-card.red .value { color: #dc2626; }
+    .stat-card.purple .value { color: #7c3aed; }
+
+    /* TABLE */
+    .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 20px; margin-bottom: 24px; }
+    .card h2 { font-size: 18px; margin-bottom: 16px; }
+    .toolbar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+    .toolbar input, .toolbar select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+    .toolbar button { padding: 8px 16px; border: none; background: #2563eb; color: #fff; border-radius: 8px; cursor: pointer; font-size: 14px; }
+    .toolbar button:hover { background: #1d4ed8; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+    th { font-weight: 600; color: #666; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    tr:hover { background: #fafbfc; }
+
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .badge-confirmed { background: #dcfce7; color: #16a34a; }
+    .badge-pending { background: #fef3c7; color: #d97706; }
+    .badge-cancelled { background: #fee2e2; color: #dc2626; }
+    .badge-completed { background: #dbeafe; color: #2563eb; }
+    .badge-no_show { background: #f3e8ff; color: #7c3aed; }
+
+    .pagination { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 16px; }
+    .pagination button { padding: 6px 14px; border: 1px solid #ddd; background: #fff; border-radius: 6px; cursor: pointer; }
+    .pagination button:disabled { opacity: 0.4; cursor: default; }
+    .pagination button.current { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+    /* POPULAR SERVICES */
+    .popular-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .popular-bar .bar-fill { height: 24px; background: linear-gradient(90deg, #2563eb, #7c3aed); border-radius: 6px; min-width: 20px; transition: width 0.5s; }
+    .popular-bar .bar-label { font-size: 13px; min-width: 140px; }
+    .popular-bar .bar-count { font-size: 13px; font-weight: 600; color: #666; }
+
+    /* STATUS DROPDOWN */
+    .status-select { padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; cursor: pointer; }
+
+    .loading { text-align: center; padding: 40px; color: #888; }
+    .error { color: #dc2626; padding: 12px; background: #fee2e2; border-radius: 8px; margin: 12px 0; }
+    .hidden { display: none !important; }
+    .login-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .login-card {
+      width: 100%;
+      max-width: 380px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      padding: 24px;
+    }
+    .login-card h2 { font-size: 24px; margin-bottom: 16px; color: #1a1a2e; }
+    .login-card input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    .login-card button {
+      width: 100%;
+      padding: 10px 12px;
+      border: none;
+      border-radius: 8px;
+      background: #2563eb;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .login-card button:hover { background: #1d4ed8; }
+    .login-error {
+      display: none;
+      margin-top: 12px;
+      color: #dc2626;
+      background: #fee2e2;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+
+    @media (max-width: 768px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .container { padding: 12px; }
+      table { font-size: 12px; }
+      th, td { padding: 6px 8px; }
+    }
+
+    /* MODAL */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .modal { background: #fff; border-radius: 12px; padding: 24px; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+    .modal h2 { font-size: 20px; margin-bottom: 16px; }
+    .modal label { display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 4px; margin-top: 12px; }
+    .modal input, .modal textarea { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; }
+    .modal textarea { resize: vertical; min-height: 60px; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+    .modal-actions button { padding: 8px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-secondary { background: #e5e7eb; color: #333; }
+    .btn-secondary:hover { background: #d1d5db; }
+    .btn-danger { background: #dc2626; color: #fff; }
+    .btn-danger:hover { background: #b91c1c; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 768px) { .form-row { grid-template-columns: 1fr; } }
+    .svc-active { color: #16a34a; }
+    .svc-inactive { color: #dc2626; }
+  </style>
+</head>
+<body>
+
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <h2>Admin Login</h2>
+    <input id="login-password" type="password" placeholder="Enter admin password" />
+    <button onclick="login()">Login</button>
+    <div id="login-error" class="login-error">密碼錯誤</div>
+  </div>
+</div>
+
+<div id="main-app" class="hidden">
+  <nav class="nav">
+    <h1>💼 AI Top Sales Admin</h1>
+    <div class="nav-links">
+      <button class="active" onclick="showPage('dashboard', event)">Dashboard</button>
+      <button onclick="showPage('bookings', event)">Bookings</button>
+      <button onclick="showPage('contacts', event)">Contacts</button>
+      <button onclick="showPage('services', event)">Services</button>
+      <button onclick="showPage('hours', event)">Business Hours</button>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="container">
+
+  <!-- DASHBOARD PAGE -->
+  <div id="page-dashboard" class="page active">
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card blue"><div class="label">Today's Bookings</div><div class="value" id="s-today">-</div></div>
+      <div class="stat-card green"><div class="label">Upcoming</div><div class="value" id="s-upcoming">-</div></div>
+      <div class="stat-card orange"><div class="label">Completed</div><div class="value" id="s-completed">-</div></div>
+      <div class="stat-card red"><div class="label">Cancelled</div><div class="value" id="s-cancelled">-</div></div>
+      <div class="stat-card purple"><div class="label">Total Contacts</div><div class="value" id="s-contacts">-</div></div>
+    </div>
+
+    <div class="card">
+      <h2>📊 Popular Services</h2>
+      <div id="popular-services"><div class="loading">Loading...</div></div>
+    </div>
+
+    <div class="card">
+      <h2>🕐 Recent Bookings</h2>
+      <table>
+        <thead><tr><th>Service</th><th>Customer</th><th>Phone</th><th>Date</th><th>Status</th></tr></thead>
+        <tbody id="recent-bookings"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- BOOKINGS PAGE -->
+  <div id="page-bookings" class="page">
+    <div class="card">
+      <h2>📅 All Bookings</h2>
+      <div class="toolbar">
+        <select id="filter-status" onchange="loadBookings()">
+          <option value="">All Status</option>
+          <option value="CONFIRMED">Confirmed</option>
+          <option value="PENDING">Pending</option>
+          <option value="COMPLETED">Completed</option>
+          <option value="CANCELLED">Cancelled</option>
+          <option value="NO_SHOW">No Show</option>
+        </select>
+        <input type="date" id="filter-date" onchange="loadBookings()" />
+        <button onclick="document.getElementById('filter-status').value='';document.getElementById('filter-date').value='';loadBookings()">Clear</button>
+      </div>
+      <table>
+        <thead><tr><th>Service</th><th>Customer</th><th>Phone</th><th>Date / Time</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="bookings-body"><tr><td colspan="6" class="loading">Loading...</td></tr></tbody>
+      </table>
+      <div class="pagination" id="bookings-pagination"></div>
+    </div>
+  </div>
+
+  <!-- CONTACTS PAGE -->
+  <div id="page-contacts" class="page">
+    <div class="card">
+      <h2>👥 Contacts</h2>
+      <div class="toolbar">
+        <input type="text" id="contact-search" placeholder="Search name or phone..." onkeydown="if(event.key==='Enter')loadContacts()" />
+        <button onclick="loadContacts()">Search</button>
+      </div>
+      <table>
+        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Bookings</th><th>Joined</th></tr></thead>
+        <tbody id="contacts-body"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
+      </table>
+      <div class="pagination" id="contacts-pagination"></div>
+    </div>
+  </div>
+
+  <!-- SERVICES PAGE -->
+  <div id="page-services" class="page">
+    <div class="card">
+      <h2>🛍️ Services</h2>
+      <div class="toolbar">
+        <button onclick="openServiceModal()">+ Add Service</button>
+      </div>
+      <table>
+        <thead><tr><th>Name</th><th>Price</th><th>Duration</th><th>Effect</th><th>Active</th><th>Actions</th></tr></thead>
+        <tbody id="services-body"><tr><td colspan="6" class="loading">Loading...</td></tr></tbody>
+      </table>
+      <div class="pagination" id="services-pagination"></div>
+    </div>
+  </div>
+
+  <!-- BUSINESS HOURS PAGE -->
+  <div id="page-hours" class="page">
+    <div class="card">
+      <h2>⏰ Business Hours</h2>
+      <table>
+        <thead>
+          <tr><th>Day</th><th>Open</th><th>Close</th><th>Closed</th><th>Slot (min)</th></tr>
+        </thead>
+        <tbody id="hours-table-body"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
+      </table>
+      <div class="toolbar" style="margin-top:16px">
+        <button onclick="saveBusinessHours()">Save Hours</button>
+        <button onclick="regenerateSlots()" style="background:#16a34a">Regenerate Slots (14 days)</button>
+      </div>
+      <div id="hours-status" style="margin-top:12px;color:#16a34a;display:none"></div>
+    </div>
+
+    <div class="card">
+      <h2>📅 Check Available Slots</h2>
+      <div class="toolbar">
+        <input type="date" id="check-date" />
+        <button onclick="checkAvailableSlots()">Check</button>
+      </div>
+      <div id="available-slots"></div>
+    </div>
+  </div>
+
+  </div>
+
+  <!-- SERVICE MODAL -->
+  <div id="service-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <h2 id="service-modal-title">Add Service</h2>
+      <input type="hidden" id="svc-id" />
+
+      <label>Service Name *</label>
+      <input type="text" id="svc-title" placeholder="e.g. HIFU 拉提緊緻" />
+
+      <label>Description</label>
+      <textarea id="svc-content" placeholder="服務描述"></textarea>
+
+      <div class="form-row">
+        <div>
+          <label>Price</label>
+          <input type="text" id="svc-price" placeholder="e.g. HKD 1200" />
+        </div>
+        <div>
+          <label>Discount Price</label>
+          <input type="text" id="svc-discountPrice" placeholder="e.g. HKD 980" />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div>
+          <label>Duration</label>
+          <input type="text" id="svc-duration" placeholder="e.g. 60分鐘" />
+        </div>
+        <div>
+          <label>Category</label>
+          <input type="text" id="svc-category" placeholder="e.g. 面部護理" />
+        </div>
+      </div>
+
+      <label>Effect / 功效</label>
+      <input type="text" id="svc-effect" placeholder="e.g. 提拉緊緻、改善輪廓" />
+
+      <label>Suitable For / 適合對象</label>
+      <input type="text" id="svc-suitable" placeholder="e.g. 25歲以上，皮膚鬆弛" />
+
+      <label>Not Suitable For / 不適合對象</label>
+      <input type="text" id="svc-unsuitable" placeholder="e.g. 孕婦、皮膚有傷口" />
+
+      <label>Precautions / 注意事項</label>
+      <textarea id="svc-precaution" placeholder="e.g. 療程後避免日曬"></textarea>
+
+      <label>Aliases (comma-separated)</label>
+      <input type="text" id="svc-aliases" placeholder="e.g. hifu, 超聲波, 拉提" />
+
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeServiceModal()">Cancel</button>
+        <button class="btn-primary" onclick="saveService()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DELETE CONFIRM MODAL -->
+  <div id="delete-modal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:400px">
+      <h2>Confirm Delete</h2>
+      <p id="delete-msg" style="margin:12px 0">Are you sure you want to delete this service?</p>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+        <button class="btn-danger" onclick="confirmDeleteService()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = window.location.origin;
+let authToken = null;
+let bookingsPage = 1;
+let contactsPage = 1;
+
+function setAuthUI(loggedIn) {
+  document.getElementById('login-screen').classList.toggle('hidden', loggedIn);
+  document.getElementById('main-app').classList.toggle('hidden', !loggedIn);
+}
+
+function showLoginError(show) {
+  document.getElementById('login-error').style.display = show ? 'block' : 'none';
+}
+
+async function login() {
+  const input = document.getElementById('login-password');
+  const password = input.value;
+  showLoginError(false);
+  try {
+    const res = await fetch(API + '/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) {
+      authToken = null;
+      input.value = '';
+      showLoginError(true);
+      return;
+    }
+    const data = await res.json();
+    authToken = data.token;
+    input.value = '';
+    setAuthUI(true);
+    loadStats();
+  } catch {
+    authToken = null;
+    input.value = '';
+    showLoginError(true);
+  }
+}
+
+function logout() {
+  authToken = null;
+  setAuthUI(false);
+}
+
+async function authedFetch(url, options = {}) {
+  const headers = {
+    ...(options.headers || {}),
+    Authorization: 'Bearer ' + authToken,
+  };
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401) {
+    authToken = null;
+    setAuthUI(false);
+    throw new Error('Unauthorized');
+  }
+  return res;
+}
+
+// — Navigation —
+function showPage(name, evt) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-links button').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  if (evt && evt.target) evt.target.classList.add('active');
+  if (name === 'bookings') loadBookings();
+  if (name === 'contacts') loadContacts();
+  if (name === 'services') loadServices();
+  if (name === 'hours') loadBusinessHours();
+}
+
+// — Dashboard —
+async function loadStats() {
+  try {
+    const res = await authedFetch(API + '/admin/stats');
+    const d = await res.json();
+    document.getElementById('s-today').textContent = d.todayBookings;
+    document.getElementById('s-upcoming').textContent = d.upcomingBookings;
+    document.getElementById('s-completed').textContent = d.completedBookings;
+    document.getElementById('s-cancelled').textContent = d.cancelledBookings;
+    document.getElementById('s-contacts').textContent = d.totalContacts;
+
+    // Popular services
+    const popEl = document.getElementById('popular-services');
+    if (d.popularServices.length === 0) {
+      popEl.innerHTML = '<p style="color:#888">No data yet</p>';
+    } else {
+      const maxCount = Math.max(...d.popularServices.map(s => s.count));
+      popEl.innerHTML = d.popularServices.map(s => `
+        <div class="popular-bar">
+          <div class="bar-label">${esc(s.serviceName || 'Unknown')}</div>
+          <div class="bar-fill" style="width: ${(s.count / maxCount) * 300}px"></div>
+          <div class="bar-count">${s.count}</div>
+        </div>
+      `).join('');
+    }
+
+    // Recent bookings
+    const tbody = document.getElementById('recent-bookings');
+    if (d.recentBookings.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="color:#888">No bookings yet</td></tr>';
+    } else {
+      tbody.innerHTML = d.recentBookings.map(b => `
+        <tr>
+          <td>${esc(b.serviceName || b.serviceDisplayName || '-')}</td>
+          <td>${esc(b.contact?.name || '-')}</td>
+          <td>${esc(b.contact?.phone || '-')}</td>
+          <td>${formatDate(b.startTime || b.createdAt)}</td>
+          <td><span class="badge badge-${(b.status||'').toLowerCase()}">${b.status}</span></td>
+        </tr>
+      `).join('');
+    }
+  } catch (e) {
+    console.error('Failed to load stats:', e);
+  }
+}
+
+// — Bookings —
+async function loadBookings(page) {
+  bookingsPage = page || 1;
+  const status = document.getElementById('filter-status').value;
+  const date = document.getElementById('filter-date').value;
+  const params = new URLSearchParams({ page: bookingsPage, limit: 20 });
+  if (status) params.set('status', status);
+  if (date) params.set('date', date);
+
+  const tbody = document.getElementById('bookings-body');
+  tbody.innerHTML = '<tr><td colspan="6" class="loading">Loading...</td></tr>';
+
+  try {
+    const res = await authedFetch(API + '/admin/bookings?' + params);
+    const d = await res.json();
+
+    if (d.bookings.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="color:#888">No bookings found</td></tr>';
+    } else {
+      tbody.innerHTML = d.bookings.map(b => `
+        <tr>
+          <td>${esc(b.serviceName || b.serviceDisplayName || '-')}</td>
+          <td>${esc(b.contact?.name || '-')}</td>
+          <td>${esc(b.contact?.phone || '-')}</td>
+          <td>${formatDate(b.startTime || b.createdAt)}</td>
+          <td><span class="badge badge-${(b.status||'').toLowerCase()}">${b.status}</span></td>
+          <td>
+            <select class="status-select" onchange="updateBooking('${b.id}', this.value)">
+              <option value="">Change...</option>
+              <option value="CONFIRMED">Confirmed</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+              <option value="NO_SHOW">No Show</option>
+            </select>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    renderPagination('bookings-pagination', d.page, d.totalPages, loadBookings);
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6" class="error">Failed to load bookings</td></tr>';
+  }
+}
+
+async function updateBooking(id, status) {
+  if (!status) return;
+  try {
+    const res = await authedFetch(API + '/admin/bookings/' + id, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) {
+      loadBookings(bookingsPage);
+      loadStats();
+    } else {
+      const d = await res.json();
+      alert('Error: ' + (d.error || 'Unknown'));
+    }
+  } catch (e) {
+    alert('Failed to update booking');
+  }
+}
+
+// — Contacts —
+async function loadContacts(page) {
+  contactsPage = page || 1;
+  const search = document.getElementById('contact-search').value;
+  const params = new URLSearchParams({ page: contactsPage, limit: 20 });
+  if (search) params.set('search', search);
+
+  const tbody = document.getElementById('contacts-body');
+  tbody.innerHTML = '<tr><td colspan="5" class="loading">Loading...</td></tr>';
+
+  try {
+    const res = await authedFetch(API + '/admin/contacts?' + params);
+    const d = await res.json();
+
+    if (d.contacts.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="color:#888">No contacts found</td></tr>';
+    } else {
+      tbody.innerHTML = d.contacts.map(c => `
+        <tr>
+          <td>${esc(c.name || '-')}</td>
+          <td>${esc(c.phone || '-')}</td>
+          <td>${esc(c.email || '-')}</td>
+          <td>${c.bookingCount}</td>
+          <td>${formatDate(c.createdAt)}</td>
+        </tr>
+      `).join('');
+    }
+
+    renderPagination('contacts-pagination', d.page, d.totalPages, loadContacts);
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="5" class="error">Failed to load contacts</td></tr>';
+  }
+}
+
+// — Helpers —
+function renderPagination(elId, current, total, loadFn) {
+  const el = document.getElementById(elId);
+  if (total <= 1) { el.innerHTML = ''; return; }
+  let html = `<button ${current <= 1 ? 'disabled' : ''} onclick="(${loadFn.name})(${current - 1})">← Prev</button>`;
+  for (let i = 1; i <= total; i++) {
+    if (total > 7 && i > 3 && i < total - 1 && Math.abs(i - current) > 1) {
+      if (html.slice(-3) !== '...') html += '...';
+      continue;
+    }
+    html += `<button class="${i === current ? 'current' : ''}" onclick="(${loadFn.name})(${i})">${i}</button>`;
+  }
+  html += `<button ${current >= total ? 'disabled' : ''} onclick="(${loadFn.name})(${current + 1})">Next →</button>`;
+  el.innerHTML = html;
+}
+
+function formatDate(s) {
+  if (!s) return '-';
+  const d = new Date(s);
+  return d.toLocaleDateString('zh-HK', { year: 'numeric', month: '2-digit', day: '2-digit' }) +
+    ' ' + d.toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit' });
+}
+
+function esc(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+// ══════════════════════════════════════════════
+// SERVICES
+// ══════════════════════════════════════════════
+
+let servicesPage = 1;
+let deleteServiceId = null;
+
+async function loadServices(page) {
+  servicesPage = page || 1;
+  const params = new URLSearchParams({ page: servicesPage, limit: 20 });
+  const tbody = document.getElementById('services-body');
+  tbody.innerHTML = '<tr><td colspan="6" class="loading">Loading...</td></tr>';
+
+  try {
+    const res = await authedFetch(API + '/admin/services?' + params);
+    const d = await res.json();
+
+    if (d.services.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="color:#888">No services yet. Click "+ Add Service" to create one.</td></tr>';
+    } else {
+      tbody.innerHTML = d.services.map(s => `
+        <tr>
+          <td><strong>${esc(s.title)}</strong></td>
+          <td>${esc(s.price || '-')}</td>
+          <td>${esc(s.duration || '-')}</td>
+          <td>${esc(s.effect || '-')}</td>
+          <td><span class="${s.isActive ? 'svc-active' : 'svc-inactive'}">${s.isActive ? '✓ Active' : '✗ Inactive'}</span></td>
+          <td>
+            <button style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;margin-right:4px" onclick="editService('${s.id}')">Edit</button>
+            <button style="padding:4px 10px;border:1px solid #fca5a5;border-radius:6px;background:#fff;color:#dc2626;cursor:pointer;font-size:12px" onclick="openDeleteModal('${s.id}', '${esc(s.title).replace(/'/g, "\\'")}')">Delete</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    renderPagination('services-pagination', d.page, d.totalPages, loadServices);
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6" class="error">Failed to load services</td></tr>';
+  }
+}
+
+function openServiceModal(data) {
+  document.getElementById('service-modal-title').textContent = data ? 'Edit Service' : 'Add Service';
+  document.getElementById('svc-id').value = data?.id || '';
+  document.getElementById('svc-title').value = data?.title || '';
+  document.getElementById('svc-content').value = data?.content || '';
+  document.getElementById('svc-price').value = data?.price || '';
+  document.getElementById('svc-discountPrice').value = data?.discountPrice || '';
+  document.getElementById('svc-duration').value = data?.duration || '';
+  document.getElementById('svc-category').value = data?.category || '';
+  document.getElementById('svc-effect').value = data?.effect || '';
+  document.getElementById('svc-suitable').value = data?.suitable || '';
+  document.getElementById('svc-unsuitable').value = data?.unsuitable || '';
+  document.getElementById('svc-precaution').value = data?.precaution || '';
+  document.getElementById('svc-aliases').value = (data?.aliases || []).join(', ');
+  document.getElementById('service-modal').classList.remove('hidden');
+}
+
+function closeServiceModal() {
+  document.getElementById('service-modal').classList.add('hidden');
+}
+
+async function editService(id) {
+  try {
+    const res = await authedFetch(API + '/admin/services/' + id);
+    const data = await res.json();
+    openServiceModal(data);
+  } catch (e) {
+    console.error('Failed to load service:', e);
+  }
+}
+
+async function saveService() {
+  const id = document.getElementById('svc-id').value;
+  const title = document.getElementById('svc-title').value.trim();
+  if (!title) { document.getElementById('svc-title').focus(); return; }
+
+  const aliasStr = document.getElementById('svc-aliases').value;
+  const aliases = aliasStr ? aliasStr.split(',').map(a => a.trim()).filter(Boolean) : [];
+
+  const body = {
+    title,
+    content: document.getElementById('svc-content').value.trim() || title,
+    price: document.getElementById('svc-price').value.trim() || null,
+    discountPrice: document.getElementById('svc-discountPrice').value.trim() || null,
+    duration: document.getElementById('svc-duration').value.trim() || null,
+    category: document.getElementById('svc-category').value.trim() || null,
+    effect: document.getElementById('svc-effect').value.trim() || null,
+    suitable: document.getElementById('svc-suitable').value.trim() || null,
+    unsuitable: document.getElementById('svc-unsuitable').value.trim() || null,
+    precaution: document.getElementById('svc-precaution').value.trim() || null,
+    aliases,
+  };
+
+  try {
+    const url = id ? (API + '/admin/services/' + id) : (API + '/admin/services');
+    const method = id ? 'PUT' : 'POST';
+    const res = await authedFetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      closeServiceModal();
+      loadServices(servicesPage);
+    } else {
+      const d = await res.json();
+      console.error('Save failed:', d.error);
+    }
+  } catch (e) {
+    console.error('Failed to save service:', e);
+  }
+}
+
+function openDeleteModal(id, name) {
+  deleteServiceId = id;
+  document.getElementById('delete-msg').textContent = 'Are you sure you want to delete "' + name + '"?';
+  document.getElementById('delete-modal').classList.remove('hidden');
+}
+
+function closeDeleteModal() {
+  deleteServiceId = null;
+  document.getElementById('delete-modal').classList.add('hidden');
+}
+
+async function confirmDeleteService() {
+  if (!deleteServiceId) return;
+  try {
+    const res = await authedFetch(API + '/admin/services/' + deleteServiceId, { method: 'DELETE' });
+    if (res.ok) {
+      closeDeleteModal();
+      loadServices(servicesPage);
+    } else {
+      const d = await res.json();
+      console.error('Delete failed:', d.error);
+    }
+  } catch (e) {
+    console.error('Failed to delete service:', e);
+  }
+}
+
+// ══════════════════════════════════════════════
+// BUSINESS HOURS
+// ══════════════════════════════════════════════
+
+const BH_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+async function loadBusinessHours() {
+  const tbody = document.getElementById('hours-table-body');
+  tbody.innerHTML = '<tr><td colspan="5" class="loading">Loading...</td></tr>';
+  try {
+    const res = await authedFetch(API + '/admin/business-hours');
+    const hours = await res.json();
+    tbody.innerHTML = hours.map(h => `
+      <tr>
+        <td style="font-weight:600">${BH_DAY_NAMES[h.dayOfWeek]}</td>
+        <td><input type="time" value="${h.openTime}" data-day="${h.dayOfWeek}" class="bh-open" style="padding:4px 8px;border:1px solid #ddd;border-radius:6px" ${h.isClosed ? 'disabled' : ''} /></td>
+        <td><input type="time" value="${h.closeTime}" data-day="${h.dayOfWeek}" class="bh-close" style="padding:4px 8px;border:1px solid #ddd;border-radius:6px" ${h.isClosed ? 'disabled' : ''} /></td>
+        <td><input type="checkbox" ${h.isClosed ? 'checked' : ''} data-day="${h.dayOfWeek}" class="bh-closed" onchange="toggleBhInputs(this)" /></td>
+        <td>
+          <select data-day="${h.dayOfWeek}" class="bh-slot" style="padding:4px 8px;border:1px solid #ddd;border-radius:6px" ${h.isClosed ? 'disabled' : ''}>
+            <option value="30" ${h.slotDuration === 30 ? 'selected' : ''}>30</option>
+            <option value="45" ${h.slotDuration === 45 ? 'selected' : ''}>45</option>
+            <option value="60" ${h.slotDuration === 60 ? 'selected' : ''}>60</option>
+            <option value="90" ${h.slotDuration === 90 ? 'selected' : ''}>90</option>
+            <option value="120" ${h.slotDuration === 120 ? 'selected' : ''}>120</option>
+          </select>
+        </td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="5" class="error">Failed to load business hours</td></tr>';
+  }
+}
+
+function toggleBhInputs(cb) {
+  const row = cb.closest('tr');
+  row.querySelectorAll('input[type="time"], select').forEach(el => el.disabled = cb.checked);
+}
+
+async function saveBusinessHours() {
+  const hours = [];
+  for (let day = 0; day < 7; day++) {
+    hours.push({
+      dayOfWeek: day,
+      openTime: document.querySelector(`.bh-open[data-day="${day}"]`).value,
+      closeTime: document.querySelector(`.bh-close[data-day="${day}"]`).value,
+      isClosed: document.querySelector(`.bh-closed[data-day="${day}"]`).checked,
+      slotDuration: parseInt(document.querySelector(`.bh-slot[data-day="${day}"]`).value),
+    });
+  }
+  try {
+    const res = await authedFetch(API + '/admin/business-hours', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hours }),
+    });
+    const d = await res.json();
+    const el = document.getElementById('hours-status');
+    el.textContent = 'Saved! ' + d.slotsGenerated + ' slots generated.';
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 3000);
+  } catch (e) {
+    console.error('Failed to save business hours:', e);
+  }
+}
+
+async function regenerateSlots() {
+  try {
+    const res = await authedFetch(API + '/admin/generate-slots', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ daysAhead: 14 }),
+    });
+    const d = await res.json();
+    const el = document.getElementById('hours-status');
+    el.textContent = 'Regenerated ' + d.slotsGenerated + ' slots.';
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 3000);
+  } catch (e) {
+    console.error('Failed to regenerate slots:', e);
+  }
+}
+
+async function checkAvailableSlots() {
+  const date = document.getElementById('check-date').value;
+  if (!date) return;
+  const container = document.getElementById('available-slots');
+  try {
+    const res = await authedFetch(API + '/admin/available-slots?date=' + date);
+    const slots = await res.json();
+    if (slots.length === 0) {
+      container.innerHTML = '<p style="color:#888;margin-top:12px">No available slots for this date.</p>';
+    } else {
+      container.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">' +
+        slots.map(s => `<span class="badge badge-confirmed">${s.time} - ${s.endTime}</span>`).join('') +
+        '</div>';
+    }
+  } catch (e) {
+    container.innerHTML = '<p class="error">Failed to check slots</p>';
+  }
+}
+
+// — Init —
+setAuthUI(false);
+document.getElementById('login-password').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') login();
+});
+</script>
+</body>
+</html>
