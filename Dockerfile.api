@@ -1,31 +1,34 @@
 FROM node:20-alpine
 
+# openssl 係 Prisma 需要
+RUN apk add --no-cache openssl
+
 WORKDIR /app
 
 # Install pnpm
 RUN npm install -g pnpm@9.15.4
 
-# Copy workspace config files (layer cache 優化)
+# ── Layer cache 優化：先 copy workspace 定義 ──
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json ./
 
-# Copy 所有 package.json（讓 pnpm 解析 workspace）
-COPY apps/api/package.json ./apps/api/
-COPY apps/web/package.json ./apps/web/
-COPY apps/worker/package.json ./apps/worker/
-COPY packages/database/package.json ./packages/database/
-COPY packages/shared/package.json ./packages/shared/
-COPY packages/ai-engine/package.json ./packages/ai-engine/
+# Copy 各 package.json（唔包 config/，避免缺目錄出錯）
+COPY apps/api/package.json     ./apps/api/
+COPY apps/web/package.json     ./apps/web/
+COPY apps/worker/package.json  ./apps/worker/
+COPY packages/database/package.json       ./packages/database/
+COPY packages/shared/package.json         ./packages/shared/
+COPY packages/ai-engine/package.json      ./packages/ai-engine/
 COPY packages/channel-adapters/package.json ./packages/channel-adapters/
-COPY config/ ./config/
 
-# Install all dependencies
+# Install（呢層 cache 只有 package.json 改先失效）
 RUN pnpm install --frozen-lockfile
 
-# Copy 所有 source code
+# ── 之後先 copy 全部 source ──
 COPY . .
 
 # Generate Prisma client
-RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
+RUN pnpm --filter @ats/database generate 2>/dev/null || \
+    npx prisma generate --schema=packages/database/prisma/schema.prisma
 
 # Build API
 RUN pnpm --filter @ats/api build
