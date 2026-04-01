@@ -6,22 +6,22 @@ WORKDIR /app
 
 RUN npm install -g pnpm@9.15.4
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json ./
-
-COPY apps/api/package.json     ./apps/api/
-COPY apps/web/package.json     ./apps/web/
-COPY apps/worker/package.json  ./apps/worker/
-COPY packages/database/package.json         ./packages/database/
-COPY packages/shared/package.json           ./packages/shared/
-COPY packages/ai-engine/package.json        ./packages/ai-engine/
-COPY packages/channel-adapters/package.json ./packages/channel-adapters/
-
-RUN pnpm install --frozen-lockfile
-
+# ✅ 先 COPY 所有 source，再 install（symlinks 有 source 可以指）
 COPY . .
 
-RUN pnpm --filter @ats/database generate 2>/dev/null || npx prisma generate --schema=packages/database/prisma/schema.prisma
+# Install all workspace dependencies
+RUN pnpm install --frozen-lockfile
 
+# Generate Prisma client
+RUN pnpm --filter @ats/database run generate \
+    || npx prisma generate --schema=packages/database/prisma/schema.prisma
+
+# ✅ 按依賴順序 build 各 workspace package
+RUN pnpm --filter @ats/shared run build --if-present
+RUN pnpm --filter @ats/database run build --if-present
+RUN pnpm --filter @ats/ai-engine run build --if-present
+
+# ✅ 最後先 build API
 RUN pnpm --filter @ats/api build
 
 EXPOSE 3001
