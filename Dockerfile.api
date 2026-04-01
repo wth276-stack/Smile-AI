@@ -10,11 +10,16 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile
 
-# Generate Prisma client
-RUN cd packages/database && npx prisma generate
+# Step 1: Prisma generate (無 error 抑制)
+RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
 
-# Turbo 自動按依賴順序 build 所有 @ats/api 需要嘅 packages
-RUN pnpm exec turbo run build --filter=@ats/api...
+# Step 2: 按依賴順序逐個 build workspace packages
+RUN pnpm --filter @ats/shared run build
+RUN pnpm --filter @ats/database run build
+RUN pnpm --filter @ats/ai-engine run build
+
+# Step 3: 最後先 build API
+RUN pnpm --filter @ats/api build
 
 EXPOSE 3001
 
