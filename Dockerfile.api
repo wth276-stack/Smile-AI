@@ -6,23 +6,15 @@ WORKDIR /app
 
 RUN npm install -g pnpm@9.15.4
 
-# ✅ 先 COPY 所有 source，再 install（symlinks 有 source 可以指）
 COPY . .
 
-# Install all workspace dependencies
 RUN pnpm install --frozen-lockfile
 
 # Generate Prisma client
-RUN pnpm --filter @ats/database run generate \
-    || npx prisma generate --schema=packages/database/prisma/schema.prisma
+RUN cd packages/database && npx prisma generate
 
-# ✅ 按依賴順序 build 各 workspace package
-RUN pnpm --filter @ats/shared run build --if-present
-RUN pnpm --filter @ats/database run build --if-present
-RUN pnpm --filter @ats/ai-engine run build --if-present
-
-# ✅ 最後先 build API
-RUN pnpm --filter @ats/api build
+# Turbo 自動按依賴順序 build 所有 @ats/api 需要嘅 packages
+RUN pnpm exec turbo run build --filter=@ats/api...
 
 EXPOSE 3001
 
