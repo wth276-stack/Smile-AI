@@ -3,26 +3,62 @@ import type { PromptContext, BookingDraft, KnowledgeChunk } from './types';
 export function formatKnowledgeChunks(chunks: KnowledgeChunk[]): string {
   if (chunks.length === 0) return 'No knowledge base available.';
 
+  const trimText = (text: string, max: number): string => {
+    const t = text.replace(/\s+/g, ' ').trim();
+    if (t.length <= max) return t;
+    return `${t.slice(0, max - 1)}…`;
+  };
+  const firstClause = (text: string, max: number): string => {
+    const clause = text.split(/[。.!；;，,]/)[0] ?? text;
+    return trimText(clause, max);
+  };
+  const compactFaq = (items: Array<{ question: string; answer: string }>): string =>
+    items
+      .slice(0, 2)
+      .map((f) => {
+        const keyword = trimText(
+          f.question.replace(/[？?].*$/, '').replace(/^Q:\s*/i, '').trim(),
+          10,
+        );
+        const answer = firstClause(f.answer.replace(/^A:\s*/i, '').trim(), 20);
+        return `${keyword}:${answer}`;
+      })
+      .join(' / ');
+
   return chunks
     .map((c) => {
-      const lines: string[] = [`【${c.title}】`];
-      lines.push(c.content);
-      if (c.price) lines.push(`價錢: ${c.price}`);
-      if (c.discountPrice) lines.push(`優惠價: ${c.discountPrice}`);
-      if (c.effect) lines.push(`功效: ${c.effect}`);
-      if (c.duration) lines.push(`時長: ${c.duration}`);
-      if (c.suitable) lines.push(`適合: ${c.suitable}`);
-      if (c.unsuitable) lines.push(`不適合: ${c.unsuitable}`);
-      if (c.precaution) lines.push(`注意事項: ${c.precaution}`);
-      if (c.steps?.length) lines.push(`步驟: ${c.steps.join(' → ')}`);
-      if (c.faqItems?.length) {
-        for (const faq of c.faqItems) {
-          lines.push(`Q: ${faq.question}\nA: ${faq.answer}`);
-        }
+      // Keep business hours block unchanged so opening-hour behavior is preserved.
+      if (c.title === '營業時間') {
+        return `【${c.title}】\n${c.content}`;
       }
+
+      const pricePart = c.price ? `$${String(c.price).replace(/^HK\$?/i, '').trim()}` : '$-';
+      const discountPart = c.discountPrice
+        ? ` → $${String(c.discountPrice).replace(/^HK\$?/i, '').trim()}`
+        : '';
+      const durationPart = c.duration ? c.duration.replace(/\s*分鐘$/, ' mins') : '-';
+      const suitablePart = firstClause(
+        c.suitable ?? c.unsuitable ?? 'General beauty/wellness customers',
+        28,
+      );
+      const cautionPart = firstClause(c.precaution ?? 'Follow therapist aftercare guidance', 28);
+      const benefits = firstClause(c.effect ?? c.content.split('\n')[0], 30);
+
+      const faqCompact = c.faqItems?.length
+        ? compactFaq(c.faqItems)
+        : 'N/A';
+
+      const lines: string[] = [
+        `## ${trimText(c.title, 24)}`,
+        `Price: ${pricePart}${discountPart} | Duration: ${durationPart}`,
+        `Benefits: ${benefits}`,
+        `Suitable for: ${suitablePart}`,
+        `Caution: ${cautionPart}`,
+        `FAQ: ${faqCompact}`,
+      ];
       return lines.join('\n');
     })
-    .join('\n\n---\n\n');
+    .join('\n\n');
 }
 
 function formatDraftState(draft: BookingDraft): string {
@@ -115,6 +151,11 @@ Rules for newSlots:
 - When the customer provides a phone number, you MUST include it in newSlots
 - When the customer confirms a service, include serviceName and serviceDisplayName
 - When you acknowledge a date or time in your reply, include it in newSlots
+
+## Service Matching
+- When the customer mentions a service name (even with typos or partial names), match it to the closest service in the Knowledge Base
+- Do NOT list all services unless the customer explicitly asks "有咩服務" or similar
+- If you're 80%+ confident which service they mean, proceed with that service directly
 
 ## Knowledge Base
 ${kb}

@@ -38,14 +38,25 @@ export function validateOutput(
   const intent = raw.intents?.[0] ?? 'OTHER';
   const newSlots = raw.newSlots ?? raw.bookingDraft ?? {};
   const mergedDraft = mergeDraft(ctx.currentDraft, newSlots);
+  const normalise = (s: string) => s.toLowerCase().replace(/\s+/g, '');
+  const kbTitles = ctx.knowledgeChunks.map((c) => c.title);
+  const isFuzzyServiceMatch = (candidate: string) => {
+    const b = normalise(candidate);
+    return kbTitles.some((title) => {
+      const a = normalise(title);
+      return a.includes(b) || b.includes(a);
+    });
+  };
 
   if (newSlots.serviceDisplayName) {
-    const titles = ctx.knowledgeChunks.map((c) => c.title.toLowerCase());
-    if (!titles.includes(newSlots.serviceDisplayName.toLowerCase())) {
-      const available = ctx.knowledgeChunks.map((c) => c.title).join('、');
+    if (!isFuzzyServiceMatch(newSlots.serviceDisplayName)) {
       issues.push(`Service "${newSlots.serviceDisplayName}" not found in KB`);
-      reply = `我哋提供嘅服務有：${available}。你想了解邊一個？`;
-      action = 'REPLY_ONLY';
+    }
+  }
+
+  if (newSlots.serviceName) {
+    if (!isFuzzyServiceMatch(newSlots.serviceName)) {
+      issues.push(`Service "${newSlots.serviceName}" not found in KB`);
     }
   }
 

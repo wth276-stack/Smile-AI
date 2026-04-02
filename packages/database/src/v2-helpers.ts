@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { prisma } from './client';
 import { toPrismaJson } from './json';
 
@@ -106,7 +107,7 @@ export async function getV2ConversationState(
 export async function saveV2ConversationState(
   whatsappId: string,
   tenantId: string,
-  bookingState: Record<string, unknown>,
+  bookingState: Prisma.InputJsonValue,
 ): Promise<void> {
   const existing = await prisma.conversation.findFirst({
     where: { tenantId, externalId: whatsappId },
@@ -114,14 +115,14 @@ export async function saveV2ConversationState(
   });
 
   const mergedMeta = {
-    ...((existing?.metadata as Record<string, unknown>) ?? {}),
+    ...((existing?.metadata as any) ?? {}),
     bookingState,
   };
 
   if (existing) {
     await prisma.conversation.update({
       where: { id: existing.id },
-      data: { metadata: toPrismaJson(mergedMeta) },
+      data: { metadata: toPrismaJson(mergedMeta as Prisma.InputJsonObject) },
     });
   } else {
     const contact = await prisma.contact.create({
@@ -133,7 +134,7 @@ export async function saveV2ConversationState(
         contactId: contact.id,
         channel: 'WEBCHAT',
         externalId: whatsappId,
-        metadata: toPrismaJson(mergedMeta),
+        metadata: toPrismaJson(mergedMeta as Prisma.InputJsonObject),
       },
     });
   }

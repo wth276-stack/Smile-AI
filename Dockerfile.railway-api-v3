@@ -21,6 +21,12 @@ COPY . .
 
 RUN pnpm --filter @ats/database generate
 RUN pnpm --filter @ats/shared build
+RUN echo "=== conversation-helpers.ts 100-112 ===" && \
+    sed -n '100,112p' packages/database/src/conversation-helpers.ts && \
+    echo "=== v2-helpers.ts 118-138 ===" && \
+    sed -n '118,138p' packages/database/src/v2-helpers.ts && \
+    echo "=== json.ts ===" && \
+    sed -n '1,80p' packages/database/src/json.ts
 RUN pnpm --filter @ats/database build
 RUN pnpm --filter @ats/ai-engine build
 RUN pnpm --filter @ats/channel-adapters build

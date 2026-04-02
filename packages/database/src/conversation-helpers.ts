@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from './client';
 import { toPrismaJson } from './json';
 
@@ -93,7 +94,7 @@ export async function getBookingDraft(
 
 export async function updateBookingDraft(
   conversationId: string,
-  draft: Record<string, unknown>,
+  draft: Prisma.InputJsonValue,
 ) {
   const conv = await prisma.conversation.findUnique({
     where: { id: conversationId },
