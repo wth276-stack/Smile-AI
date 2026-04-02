@@ -106,7 +106,7 @@ export async function updateBookingDraft(
   await prisma.conversation.update({
     where: { id: conversationId },
     data: {
-      metadata: toPrismaJson({ ...existingMeta, bookingDraft: draft }),
+      metadata: toPrismaJson({ ...existingMeta, bookingDraft: draft }) as any,
     },
   });
 }
