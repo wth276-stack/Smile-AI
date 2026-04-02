@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { prisma } from './client';
+import { toPrismaJson } from './json';
 
 interface V2BookingSlots {
   serviceName?: string | null;
@@ -120,7 +121,7 @@ export async function saveV2ConversationState(
   if (existing) {
     await prisma.conversation.update({
       where: { id: existing.id },
-      data: { metadata: mergedMeta },
+      data: { metadata: toPrismaJson(mergedMeta) },
     });
   } else {
     const contact = await prisma.contact.create({
@@ -132,7 +133,7 @@ export async function saveV2ConversationState(
         contactId: contact.id,
         channel: 'WEBCHAT',
         externalId: whatsappId,
-        metadata: mergedMeta,
+        metadata: toPrismaJson(mergedMeta),
       },
     });
   }

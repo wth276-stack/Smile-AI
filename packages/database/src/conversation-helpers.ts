@@ -1,4 +1,5 @@
 import { prisma } from './client';
+import { toPrismaJson } from './json';
 
 const MAX_MESSAGES = 20;
 
@@ -104,7 +105,7 @@ export async function updateBookingDraft(
   await prisma.conversation.update({
     where: { id: conversationId },
     data: {
-      metadata: { ...existingMeta, bookingDraft: draft },
+      metadata: toPrismaJson({ ...existingMeta, bookingDraft: draft }),
     },
   });
 }
