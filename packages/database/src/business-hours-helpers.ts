@@ -42,7 +42,7 @@ export async function updateBusinessHours(
     slotDuration?: number;
   }>,
 ) {
-  const results = [];
+  const results: any[] = [];
   for (const u of updates) {
     const result = await prisma.businessHours.upsert({
       where: {
