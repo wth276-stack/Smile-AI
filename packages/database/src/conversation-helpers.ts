@@ -108,7 +108,7 @@ export async function updateBookingDraft(
     data: {
       metadata: {
         ...existingMeta,
-        bookingDraft: draft,
+        bookingDraft: draft as any,
       } as unknown as Prisma.InputJsonValue,
     },
   });
