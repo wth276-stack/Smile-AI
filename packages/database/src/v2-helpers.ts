@@ -140,7 +140,6 @@ export async function saveV2ConversationState(
         channel: 'WEBCHAT',
         externalId: whatsappId,
         metadata: {
-          ...((existing?.metadata as any) ?? {}),
           bookingState: bookingState,
         } as unknown as Prisma.InputJsonValue,
       },
