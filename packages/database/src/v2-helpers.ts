@@ -114,7 +114,7 @@ export async function saveV2ConversationState(
     select: { id: true, metadata: true },
   });
 
-  const mergedMeta = {
+  const mergedMeta: any = {
     ...((existing?.metadata as any) ?? {}),
     bookingState: bookingState as any,
   };
