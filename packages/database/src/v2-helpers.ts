@@ -122,7 +122,12 @@ export async function saveV2ConversationState(
   if (existing) {
     await prisma.conversation.update({
       where: { id: existing.id },
-      data: { metadata: toPrismaJson(mergedMeta) as any },
+      data: {
+        metadata: {
+          ...((existing?.metadata as any) ?? {}),
+          bookingState: bookingState,
+        } as unknown as Prisma.InputJsonValue,
+      },
     });
   } else {
     const contact = await prisma.contact.create({
@@ -134,7 +139,10 @@ export async function saveV2ConversationState(
         contactId: contact.id,
         channel: 'WEBCHAT',
         externalId: whatsappId,
-        metadata: toPrismaJson(mergedMeta) as any,
+        metadata: {
+          ...((existing?.metadata as any) ?? {}),
+          bookingState: bookingState,
+        } as unknown as Prisma.InputJsonValue,
       },
     });
   }
