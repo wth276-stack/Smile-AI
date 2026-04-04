@@ -103,13 +103,15 @@ export async function updateBookingDraft(
 
   const existingMeta = (conv?.metadata as Record<string, any>) ?? {};
 
+  const metaToSave = {
+    ...existingMeta,
+    bookingDraft: draft,
+  } as any;
+
   await prisma.conversation.update({
     where: { id: conversationId },
     data: {
-      metadata: {
-        ...existingMeta,
-        bookingDraft: draft as any,
-      } as unknown as Prisma.InputJsonValue,
+      metadata: metaToSave,
     },
   });
 }
