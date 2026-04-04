@@ -101,7 +101,7 @@ export async function updateBookingDraft(
     select: { metadata: true },
   });
 
-  const existingMeta = (conv?.metadata as Record<string, unknown>) ?? {};
+  const existingMeta = (conv?.metadata as Record<string, any>) ?? {};
 
   await prisma.conversation.update({
     where: { id: conversationId },
