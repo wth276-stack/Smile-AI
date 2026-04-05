@@ -6,7 +6,7 @@
     "dev": "next dev --port 3000",
     "dev:turbo": "next dev --port 3000 --turbo",
     "clean": "node -e \"try { require('fs').rmSync('.next', { recursive: true, force: true }); } catch (e) {}\"",
-    "build": "node --max-old-space-size=2048 ../../node_modules/.bin/next build",
+    "build": "next build",
     "start": "next start --port 3000",
     "lint": "next lint"
   },

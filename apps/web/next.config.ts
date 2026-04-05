@@ -1,6 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   transpilePackages: ['@ats/shared'],
   webpack: (config, { dev }) => {
     // Windows: default file watchers often miss events or lock .next; dev then 500s or exits.
