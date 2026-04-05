@@ -1,0 +1,28 @@
+FROM node:20-alpine
+RUN apk add openssl
+RUN npm install -g pnpm@9.15.4
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json ./
+COPY apps/worker/package.json ./apps/worker/
+COPY apps/api/package.json ./apps/api/
+COPY packages/database/package.json ./packages/database/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/ai-engine/package.json ./packages/ai-engine/
+COPY packages/channel-adapters/package.json ./packages/channel-adapters/
+
+RUN pnpm install --frozen-lockfile
+
+COPY . .
+
+# Build dependencies first
+RUN pnpm --filter @ats/shared build
+RUN pnpm --filter @ats/database generate
+RUN pnpm --filter @ats/database build
+RUN pnpm --filter @ats/ai-engine build
+
+# Build worker
+RUN pnpm --filter @ats/worker build
+
+CMD ["node", "apps/worker/dist/main"]
