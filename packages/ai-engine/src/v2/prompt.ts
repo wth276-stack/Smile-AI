@@ -1,6 +1,12 @@
 import type { PromptContext, BookingDraft, KnowledgeChunk } from './types';
 
-export function formatKnowledgeChunks(chunks: KnowledgeChunk[]): string {
+export function formatKnowledgeChunks(
+  chunks: KnowledgeChunk[],
+  options: { defaultSuitableFor: string; defaultCaution: string } = {
+    defaultSuitableFor: 'General customers',
+    defaultCaution: 'Follow professional aftercare guidance',
+  },
+): string {
   if (chunks.length === 0) return 'No knowledge base available.';
 
   const trimText = (text: string, max: number): string => {
@@ -38,10 +44,10 @@ export function formatKnowledgeChunks(chunks: KnowledgeChunk[]): string {
         : '';
       const durationPart = c.duration ? c.duration.replace(/\s*分鐘$/, ' mins') : '-';
       const suitablePart = firstClause(
-        c.suitable ?? c.unsuitable ?? 'General beauty/wellness customers',
+        c.suitable ?? c.unsuitable ?? options.defaultSuitableFor,
         28,
       );
-      const cautionPart = firstClause(c.precaution ?? 'Follow therapist aftercare guidance', 28);
+      const cautionPart = firstClause(c.precaution ?? options.defaultCaution, 28);
       const benefits = firstClause(c.effect ?? c.content.split('\n')[0], 30);
 
       const faqCompact = c.faqItems?.length
@@ -59,6 +65,29 @@ export function formatKnowledgeChunks(chunks: KnowledgeChunk[]): string {
       return lines.join('\n');
     })
     .join('\n\n');
+}
+
+export function resolveKbDefaults(businessType: string): {
+  defaultSuitableFor: string;
+  defaultCaution: string;
+} {
+  const t = businessType.toLowerCase();
+  if (t.includes('clinic') || t.includes('medical') || t.includes('dental')) {
+    return { defaultSuitableFor: 'General patients', defaultCaution: 'Follow doctor instructions' };
+  }
+  if (t.includes('gym') || t.includes('fitness') || t.includes('yoga')) {
+    return {
+      defaultSuitableFor: 'General fitness customers',
+      defaultCaution: 'Consult trainer if you have injuries',
+    };
+  }
+  if (t.includes('restaurant') || t.includes('dining') || t.includes('cafe')) {
+    return { defaultSuitableFor: 'All diners', defaultCaution: 'Inform staff of any allergies' };
+  }
+  return {
+    defaultSuitableFor: 'General customers',
+    defaultCaution: 'Follow professional aftercare guidance',
+  };
 }
 
 function formatDraftState(draft: BookingDraft): string {
@@ -82,7 +111,12 @@ function formatDraftState(draft: BookingDraft): string {
 }
 
 export function buildSystemPrompt(ctx: PromptContext): string {
-  const kb = formatKnowledgeChunks(ctx.knowledgeChunks);
+  const kbDefaults = resolveKbDefaults(ctx.tenantProfile.businessType);
+  const kb = formatKnowledgeChunks(ctx.knowledgeChunks, {
+    defaultSuitableFor:
+      ctx.tenantProfile.defaultSuitableFor ?? kbDefaults.defaultSuitableFor,
+    defaultCaution: ctx.tenantProfile.defaultCaution ?? kbDefaults.defaultCaution,
+  });
   const draft = formatDraftState(ctx.currentDraft);
   const bookingsSection = ctx.existingBookings && ctx.existingBookings.length > 0
     ? `\n\n## Customer's Upcoming Bookings\n${ctx.existingBookings.map((b, i) => {
@@ -97,7 +131,7 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   const todayStr = now.toISOString().split('T')[0];
   const dayOfWeek = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
 
-  return `You are a WhatsApp sales assistant for a beauty/wellness salon.
+  return `You are a WhatsApp sales assistant for ${ctx.tenantProfile.businessName}, a ${ctx.tenantProfile.businessType}.
 Reply in the customer's language — default to Cantonese/Traditional Chinese.
 今日日期：${todayStr}（星期${dayOfWeek}）
 
@@ -105,7 +139,7 @@ Reply in the customer's language — default to Cantonese/Traditional Chinese.
 - Friendly and professional
 - Concise — keep replies short and natural for WhatsApp
 - Use emoji sparingly (1-2 per message at most)
-- Never sound robotic or scripted
+- Never sound robotic or scripted${ctx.tenantProfile.assistantPersona ? `\n- Personality style override: ${ctx.tenantProfile.assistantPersona}` : ''}
 
 ## Booking Flow Rules
 - Collect booking info through natural conversation, ONE piece at a time

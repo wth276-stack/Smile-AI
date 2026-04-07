@@ -216,3 +216,52 @@ export async function cancelBooking(
     select: { id: true, serviceName: true, status: true },
   });
 }
+
+/** Shape consumed by the AI engine as `KnowledgeChunk` for SERVICE documents. */
+export type ActiveServiceKnowledgeChunk = {
+  documentId: string;
+  title: string;
+  content: string;
+  score: number;
+  price: string | null;
+  discountPrice: string | null;
+  effect: string | null;
+  suitable: string | null;
+  unsuitable: string | null;
+  precaution: string | null;
+  duration: string | null;
+  aliases: string[];
+  steps: string[];
+  faqItems: Array<{ question: string; answer: string }> | null;
+};
+
+export async function getActiveServices(tenantId: string): Promise<ActiveServiceKnowledgeChunk[]> {
+  const docs = await prisma.knowledgeDocument.findMany({
+    where: { tenantId, docType: 'SERVICE', isActive: true },
+    orderBy: { title: 'asc' },
+  });
+  return docs.map((d) => ({
+    documentId: d.id,
+    title: d.title,
+    content: d.content,
+    score: 1.0,
+    price: d.price,
+    discountPrice: d.discountPrice,
+    effect: d.effect,
+    suitable: d.suitable,
+    unsuitable: d.unsuitable,
+    precaution: d.precaution,
+    duration: d.duration,
+    aliases: d.aliases,
+    steps: d.steps,
+    faqItems: d.faqItems as Array<{ question: string; answer: string }> | null,
+  }));
+}
+
+export async function getTenantSettings(tenantId: string): Promise<Record<string, unknown>> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true },
+  });
+  return (tenant?.settings as Record<string, unknown>) ?? {};
+}

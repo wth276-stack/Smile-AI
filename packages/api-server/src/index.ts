@@ -4,8 +4,15 @@ import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { runAiEngineV2 } from '../../ai-engine/src/v2/engine';
-import { submitV2Booking, getBookingsForPhone, modifyBooking, cancelBooking } from '../../database/src/v2-helpers';
-import { getKnowledgeChunksFromDB } from '../../database/src/service-helpers';
+import {
+  submitV2Booking,
+  getBookingsForPhone,
+  modifyBooking,
+  cancelBooking,
+  getActiveServices,
+  getTenantSettings,
+} from '../../database/src/v2-helpers';
+import { getBusinessHoursForPrompt } from '../../database/src/business-hours-helpers';
 import {
   findOrCreateWebchatConversation,
   loadConversationHistory,
@@ -29,6 +36,26 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const MAX_MESSAGES = 20;
 const TENANT_ID = 'demo-tenant';
+
+/** Used when the DB has no active SERVICE documents (empty tenant / migration). */
+const FALLBACK_KNOWLEDGE: KnowledgeChunk[] = [
+  {
+    documentId: 'fallback',
+    title: '服務資訊',
+    content: '暫時無法從資料庫載入服務目錄。如想查詢療程或預約，請直接聯絡店員。',
+    score: 1.0,
+    price: null,
+    discountPrice: null,
+    effect: null,
+    suitable: null,
+    unsuitable: null,
+    precaution: null,
+    duration: null,
+    aliases: [],
+    steps: [],
+    faqItems: null,
+  },
+];
 
 const chatLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -99,10 +126,34 @@ app.post('/api/chat', async (req, res) => {
       createdAt: new Date().toISOString(),
     }));
 
-    const knowledgeChunks = await getKnowledgeChunksFromDB(TENANT_ID);
+    let knowledgeChunks: KnowledgeChunk[] = await getActiveServices(TENANT_ID);
+    if (knowledgeChunks.length === 0) {
+      knowledgeChunks = FALLBACK_KNOWLEDGE;
+    }
+    const hoursText = await getBusinessHoursForPrompt(TENANT_ID);
+    knowledgeChunks = [
+      ...knowledgeChunks,
+      {
+        documentId: 'business-hours',
+        title: '營業時間',
+        content: hoursText,
+        score: 1.0,
+        price: null,
+        discountPrice: null,
+        effect: null,
+        suitable: null,
+        unsuitable: null,
+        precaution: null,
+        duration: null,
+        aliases: [],
+        steps: [],
+        faqItems: null,
+      },
+    ];
+    const tenantSettings = await getTenantSettings(TENANT_ID);
 
     const input: AiEngineInput = {
-      tenant: { id: TENANT_ID, plan: 'pro', settings: {} },
+      tenant: { id: TENANT_ID, plan: 'pro', settings: tenantSettings },
       contact: { id: conversation.contactId, tags: [] },
       conversation: { id: convId, channel: 'WEBCHAT' as any, messageCount: history.length + 1 },
       messages: engineMessages,

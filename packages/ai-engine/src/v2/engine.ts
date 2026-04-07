@@ -7,6 +7,7 @@ import type {
   LLMOutput,
   BookingDraft,
   PromptContext,
+  TenantProfile,
 } from './types';
 import { buildMessages } from './prompt';
 import { validateOutput } from './validator';
@@ -114,6 +115,27 @@ function ensureAssistantJson(content: string): string {
   // 純文字 → 包成 JSON 格式，等 model 保持 JSON 輸出
   return JSON.stringify({ reply: content, intent: 'REPLY', action: 'REPLY' });
 }
+function readSettingString(
+  settings: Record<string, unknown>,
+  ...keys: string[]
+): string | undefined {
+  for (const key of keys) {
+    const v = settings[key];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return undefined;
+}
+
+function tenantProfileFromSettings(settings: Record<string, unknown>): TenantProfile {
+  return {
+    businessName: readSettingString(settings, 'businessName', 'business_name') ?? 'Business',
+    businessType: readSettingString(settings, 'businessType', 'business_type') ?? 'beauty salon',
+    assistantPersona: readSettingString(settings, 'assistantPersona', 'assistant_persona'),
+    defaultSuitableFor: readSettingString(settings, 'defaultSuitableFor', 'default_suitable_for'),
+    defaultCaution: readSettingString(settings, 'defaultCaution', 'default_caution'),
+  };
+}
+
 function buildPromptContext(input: AiEngineInput): PromptContext {
   const allHistory: PromptContext['conversationHistory'] = input.messages.map((m) => {
     const raw = m as unknown as Record<string, unknown>;
@@ -133,6 +155,7 @@ function buildPromptContext(input: AiEngineInput): PromptContext {
     : allHistory;
 
   return {
+    tenantProfile: tenantProfileFromSettings(input.tenant.settings ?? {}),
     knowledgeChunks: input.knowledge,
     conversationHistory: trimmed,
     currentMessage: input.currentMessage,
