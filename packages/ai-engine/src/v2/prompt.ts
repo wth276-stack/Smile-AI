@@ -38,6 +38,13 @@ export function formatKnowledgeChunks(
         return `【${c.title}】\n${c.content}`;
       }
 
+      // Plain text KB doc (no structured fields) → output directly
+      const hasStructure =
+        c.price || c.duration || c.effect || c.suitable || c.faqItems?.length;
+      if (!hasStructure) {
+        return `## ${c.title}\n${c.content}`;
+      }
+
       const pricePart = c.price ? `$${String(c.price).replace(/^HK\$?/i, '').trim()}` : '$-';
       const discountPart = c.discountPrice
         ? ` → $${String(c.discountPrice).replace(/^HK\$?/i, '').trim()}`
