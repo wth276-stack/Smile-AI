@@ -128,11 +128,16 @@ function readSettingString(
 
 function tenantProfileFromSettings(settings: Record<string, unknown>): TenantProfile {
   return {
-    businessName: readSettingString(settings, 'businessName', 'business_name') ?? 'Business',
-    businessType: readSettingString(settings, 'businessType', 'business_type') ?? 'beauty salon',
-    assistantPersona: readSettingString(settings, 'assistantPersona', 'assistant_persona'),
-    defaultSuitableFor: readSettingString(settings, 'defaultSuitableFor', 'default_suitable_for'),
-    defaultCaution: readSettingString(settings, 'defaultCaution', 'default_caution'),
+    businessName: readSettingString(settings, 'businessName', 'business_name'),
+    businessType: readSettingString(settings, 'businessType', 'business_type'),
+    assistantRole: readSettingString(
+      settings,
+      'assistantRole',
+      'assistant_role',
+      'assistantPersona',
+      'assistant_persona',
+    ),
+    language: readSettingString(settings, 'language', 'locale'),
   };
 }
 

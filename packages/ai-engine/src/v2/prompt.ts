@@ -111,12 +111,11 @@ function formatDraftState(draft: BookingDraft): string {
 }
 
 export function buildSystemPrompt(ctx: PromptContext): string {
-  const kbDefaults = resolveKbDefaults(ctx.tenantProfile.businessType);
-  const kb = formatKnowledgeChunks(ctx.knowledgeChunks, {
-    defaultSuitableFor:
-      ctx.tenantProfile.defaultSuitableFor ?? kbDefaults.defaultSuitableFor,
-    defaultCaution: ctx.tenantProfile.defaultCaution ?? kbDefaults.defaultCaution,
-  });
+  const tp = ctx.tenantProfile;
+  const businessName = tp?.businessName ?? 'Business';
+  const businessType = tp?.businessType ?? 'beauty salon';
+  const kbDefaults = resolveKbDefaults(businessType);
+  const kb = formatKnowledgeChunks(ctx.knowledgeChunks, kbDefaults);
   const draft = formatDraftState(ctx.currentDraft);
   const bookingsSection = ctx.existingBookings && ctx.existingBookings.length > 0
     ? `\n\n## Customer's Upcoming Bookings\n${ctx.existingBookings.map((b, i) => {
@@ -131,7 +130,14 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   const todayStr = now.toISOString().split('T')[0];
   const dayOfWeek = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
 
-  return `You are a WhatsApp sales assistant for ${ctx.tenantProfile.businessName}, a ${ctx.tenantProfile.businessType}.
+  const personaExtras = [
+    tp?.assistantRole ? `- Personality style override: ${tp.assistantRole}` : '',
+    tp?.language ? `- Language preference: ${tp.language}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return `You are a WhatsApp sales assistant for ${businessName}, a ${businessType}.
 Reply in the customer's language — default to Cantonese/Traditional Chinese.
 今日日期：${todayStr}（星期${dayOfWeek}）
 
@@ -139,7 +145,7 @@ Reply in the customer's language — default to Cantonese/Traditional Chinese.
 - Friendly and professional
 - Concise — keep replies short and natural for WhatsApp
 - Use emoji sparingly (1-2 per message at most)
-- Never sound robotic or scripted${ctx.tenantProfile.assistantPersona ? `\n- Personality style override: ${ctx.tenantProfile.assistantPersona}` : ''}
+- Never sound robotic or scripted${personaExtras ? `\n${personaExtras}` : ''}
 
 ## Booking Flow Rules
 - Collect booking info through natural conversation, ONE piece at a time

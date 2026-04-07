@@ -35,7 +35,15 @@ export interface ValidatedOutput {
 
 // ── Data assembled for prompt builder ──
 
+export interface TenantProfile {
+  businessName?: string;
+  businessType?: string;
+  assistantRole?: string;
+  language?: string;
+}
+
 export interface PromptContext {
+  tenantProfile?: TenantProfile;
   knowledgeChunks: KnowledgeChunk[];
   conversationHistory: Array<{ role: 'customer' | 'assistant'; content: string }>;
   currentMessage: string;
