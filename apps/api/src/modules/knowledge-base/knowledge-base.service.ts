@@ -77,23 +77,34 @@ export class KnowledgeBaseService {
     if (keywords.length === 0) {
       return this.prisma.knowledgeDocument.findMany({
         where: { tenantId, isActive: true },
-        take: 5,
+        orderBy: { updatedAt: 'desc' },
       });
     }
 
     const conditions = keywords.flatMap((kw) => [
       { title: { contains: kw, mode: 'insensitive' as const } },
       { content: { contains: kw, mode: 'insensitive' as const } },
+      { aliases: { has: kw } },
     ]);
 
-    return this.prisma.knowledgeDocument.findMany({
+    const hits = await this.prisma.knowledgeDocument.findMany({
       where: {
         tenantId,
         isActive: true,
         OR: conditions,
       },
-      take: 5,
+      orderBy: { updatedAt: 'desc' },
     });
+
+    // If keyword search misses, fall back to all active docs
+    if (hits.length === 0) {
+      return this.prisma.knowledgeDocument.findMany({
+        where: { tenantId, isActive: true },
+        orderBy: { updatedAt: 'desc' },
+      });
+    }
+
+    return hits;
   }
 
   private extractKeywords(message: string): string[] {
@@ -105,13 +116,29 @@ export class KnowledgeBaseService {
     ]);
 
     const zhStopPattern = /^(我|你|的|了|是|在|有|和|就|不|也|都|要|會|可以|可|這|那|到|說|想|想要|嗎|呢|吧|啊|喔|哦|嘛|啦|請問|請|幫|幫我|我想|我要|買|想買)$/;
+    const enToZhMap: Record<string, string[]> = {
+      service: ['服務'],
+      services: ['服務'],
+      pricing: ['收費', '價錢', '價格'],
+      price: ['價錢', '價格', '收費'],
+      prices: ['價錢', '價格', '收費'],
+      plan: ['方案', '計劃'],
+      plans: ['方案', '計劃'],
+      faq: ['常見問題', 'FAQ'],
+      support: ['支援', '客服'],
+      booking: ['預約'],
+      trial: ['試用'],
+    };
 
     const keywords: string[] = [];
 
     const englishWords = message.match(/[a-zA-Z]{2,}/g) || [];
     for (const w of englishWords) {
-      if (!enStopWords.has(w.toLowerCase())) {
+      const lower = w.toLowerCase();
+      if (!enStopWords.has(lower)) {
         keywords.push(w);
+        const mapped = enToZhMap[lower];
+        if (mapped) keywords.push(...mapped);
       }
     }
 
