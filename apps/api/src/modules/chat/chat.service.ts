@@ -62,6 +62,18 @@ export class ChatService {
       bookingDraft,
     );
 
+    console.log(
+      '[KB DEBUG] knowledge.length:',
+      knowledge.length,
+      '| titles:',
+      knowledge.map((k) => k.title ?? k.documentId),
+    );
+
+    const kbTitles = knowledge.map((k) => k.title);
+    this.logger.log(
+      `[KB retrieve] tenant=${tenantId} conv=${conversation.id} len=${knowledge.length} titles=${JSON.stringify(kbTitles)}`,
+    );
+
     const aiInput: AiEngineInput = {
       tenant: {
         id: tenant.id,

@@ -2,7 +2,16 @@ export { prisma } from './client';
 export { withTenantScope } from './tenant-scope';
 export { PrismaClient, Prisma } from '@prisma/client';
 export type * from '@prisma/client';
-export { submitV2Booking, getV2ConversationState, saveV2ConversationState, getBookingsForPhone, modifyBooking, cancelBooking } from './v2-helpers';
+export {
+  submitV2Booking,
+  getV2ConversationState,
+  saveV2ConversationState,
+  getBookingsForPhone,
+  modifyBooking,
+  cancelBooking,
+  getActiveServices,
+  type ActiveServiceKnowledgeChunk,
+} from './v2-helpers';
 export {
   findOrCreateWebchatConversation,
   loadConversationHistory,
