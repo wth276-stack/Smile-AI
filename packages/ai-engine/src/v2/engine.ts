@@ -367,6 +367,19 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
       }
     }
 
+    if (input.knowledge.length > 0 && messages.length > 0 && messages[0].role === 'system') {
+      const systemPrompt = String(messages[0].content ?? '');
+      const hasAnyKbChunk = input.knowledge.some((k) => {
+        const title = (k.title ?? '').trim();
+        if (title && systemPrompt.includes(title)) return true;
+        const contentHead = (k.content ?? '').trim().slice(0, 20);
+        return contentHead.length > 0 && systemPrompt.includes(contentHead);
+      });
+      if (!hasAnyKbChunk) {
+        console.warn('[V2] KB chunks retrieved but not injected into prompt');
+      }
+    }
+
     const resolvedDates = resolveRelativeDates(input.currentMessage);
     if (resolvedDates) {
       const dateHint = `\n\n[系統日期解析] 以下日期已由系統準確計算，你必須直接使用，不要自行推算：\n${resolvedDates}`;

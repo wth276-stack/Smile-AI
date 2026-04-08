@@ -120,7 +120,7 @@ function formatDraftState(draft: BookingDraft): string {
 export function buildSystemPrompt(ctx: PromptContext): string {
   const tp = ctx.tenantProfile;
   const businessName = tp?.businessName ?? 'Business';
-  const businessType = tp?.businessType ?? 'beauty salon';
+  const businessType = tp?.businessType ?? 'business';
   const kbDefaults = resolveKbDefaults(businessType);
   const kb = formatKnowledgeChunks(ctx.knowledgeChunks, kbDefaults);
   const draft = formatDraftState(ctx.currentDraft);
@@ -206,6 +206,13 @@ Rules for newSlots:
 
 ## Knowledge Base
 ${kb}
+
+以上是本業務的知識庫資料。
+規則：
+1. 回答任何關於服務、價格、流程、FAQ 的問題時，必須以知識庫內容為唯一依據。
+2. 若知識庫有相關內容，直接引用並回答，不可自行捏造或補充知識庫以外的資訊。
+3. 若知識庫完全沒有相關內容，才可回答「我暫時未有相關資料，請聯絡我們了解更多。」
+4. 嚴禁使用訓練資料中的行業知識來填補知識庫的空白。
 
 ## Booking State
 ${draft}${bookingsSection}`;
