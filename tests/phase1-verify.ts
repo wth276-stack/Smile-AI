@@ -257,7 +257,7 @@ async function run1b(token: string | null): Promise<Line[]> {
   const chars = prompt.length;
   const est = estimateTokensRough(prompt);
   /** Rough ceiling when all tenant KB docs are loaded — adjust if prompt grows. */
-  const TOKEN_THRESHOLD = 4000;
+  const TOKEN_THRESHOLD = 3000;
   const pass = est < TOKEN_THRESHOLD;
   lines.push({
     ok: pass,
@@ -285,7 +285,8 @@ async function run1c(): Promise<Line[]> {
   // #2 HIFU price
   const r2 = await postDemoChat('HIFU幾錢');
   const reply2 = r2.reply ?? '';
-  const priceOk = /4980|6980|HK\$?\s*[0-9]|價錢|收費/i.test(reply2);
+  const priceOk =
+    /4980|6980|\d{3,}.*[元價$]|[元價$].*\d{3,}|HK\$?\s*\d{3,}/i.test(reply2);
   lines.push({
     ok: priceOk,
     label: '#2 服務查詢（HIFU 價錢）',
@@ -296,7 +297,9 @@ async function run1c(): Promise<Line[]> {
   const r3 = await postDemoChat('你哋有冇減肥療程');
   const reply3 = r3.reply ?? '';
   const denyOk =
-    /暫時未有|未有相關|聯絡我們|冇相關|冇專門.*減肥|冇.*減肥療程|無.*減肥療程/i.test(reply3);
+    /暫時未有|未有相關|聯絡我們|冇相關|冇專門.*減肥|冇.*減肥療程|無.*減肥療程|沒有專門|沒有.*減肥|目前沒有.*減肥/i.test(
+      reply3,
+    );
   lines.push({
     ok: denyOk,
     label: '#3 KB 冇嘅嘢（減肥）',
