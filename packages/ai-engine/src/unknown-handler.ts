@@ -48,6 +48,7 @@ const CASUAL_CHAT_PATTERNS: RegExp[] = [
 // Patterns that suggest the user is asking something specific but unclear
 const NEEDS_CLARIFICATION_PATTERNS: RegExp[] = [
   /^\.+$/,
+  /^[?？]{2,}$/,
   /^[0-9]+$/,
   /^[a-zA-Z]$/,
 ];

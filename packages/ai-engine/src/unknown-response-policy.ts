@@ -64,7 +64,7 @@ export function unknownAskMoreDetail(): string {
 }
 
 export function unknownShortPrompt(): string {
-  return '收到。想問咩？可以講多一句。';
+  return '收到。想問咩？可以講詳細啲。';
 }
 
 export function unknownBusinessPriceFollowUp(): string {
