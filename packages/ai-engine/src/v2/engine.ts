@@ -620,6 +620,29 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     if (finalAction === 'MODIFY_BOOKING' || finalAction === 'CANCEL_BOOKING') {
       // These don't need slot validation — bookingId is validated by validator.ts
     }
+
+    // Guard: strip premature confirmation language when slots are still missing
+    if (finalAction === 'COLLECT_BOOKING') {
+      const requiredSlots = ['serviceName', 'date', 'time', 'customerName', 'phone'] as const;
+      const missingSlots = requiredSlots.filter((k) => !finalMergedDraft[k]);
+      if (missingSlots.length > 0 && /確認嗎|確認？|OK嗎|ok嗎/i.test(validated.validatedReply)) {
+        const labelMap: Record<string, string> = {
+          serviceName: '服務',
+          date: '日期',
+          time: '時間',
+          customerName: '姓名',
+          phone: '電話',
+        };
+        const missingLabels = missingSlots.map((k) => labelMap[k] || k).join('、');
+        validated.validatedReply = validated.validatedReply
+          .replace(/[，,]?\s*確認嗎？?/g, '')
+          .replace(/[，,]?\s*OK嗎？?/gi, '')
+          .replace(/[，,]?\s*確認？/g, '');
+        validated.validatedReply += ` 請問你嘅${missingLabels}係？`;
+        console.log('[v2/engine] Stripped premature confirmation, asking for:', missingLabels);
+      }
+    }
+
     const finalLegacyAction = mapActionToLegacy(finalAction);
 
     const sideEffects = buildSideEffects(finalAction, finalMergedDraft, finalNewSlots, ctx);
