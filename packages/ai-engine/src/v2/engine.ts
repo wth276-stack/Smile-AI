@@ -621,11 +621,12 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
       // These don't need slot validation — bookingId is validated by validator.ts
     }
 
-    // Guard: strip premature confirmation language when slots are still missing
-    if (finalAction === 'COLLECT_BOOKING') {
+    // ── Robust guard: strip premature confirmation when required slots missing ──
+    let finalReply = validated.validatedReply;
+    {
       const requiredSlots = ['serviceName', 'date', 'time', 'customerName', 'phone'] as const;
       const missingSlots = requiredSlots.filter((k) => !finalMergedDraft[k]);
-      if (missingSlots.length > 0 && /確認嗎|確認？|OK嗎|ok嗎/i.test(validated.validatedReply)) {
+      if (missingSlots.length > 0 && /確認嗎|確認？|確認\?|confirm/i.test(finalReply)) {
         const labelMap: Record<string, string> = {
           serviceName: '服務',
           date: '日期',
@@ -634,12 +635,15 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
           phone: '電話',
         };
         const missingLabels = missingSlots.map((k) => labelMap[k] || k).join('、');
-        validated.validatedReply = validated.validatedReply
-          .replace(/[，,]?\s*確認嗎？?/g, '')
-          .replace(/[，,]?\s*OK嗎？?/gi, '')
-          .replace(/[，,]?\s*確認？/g, '');
-        validated.validatedReply += ` 請問你嘅${missingLabels}係？`;
-        console.log('[v2/engine] Stripped premature confirmation, asking for:', missingLabels);
+        finalReply = finalReply
+          .replace(/[。，,]?\s*確認嗎[？?]?/g, '')
+          .replace(/[。，,]?\s*OK嗎[？?]?/gi, '')
+          .replace(/[。，,]?\s*確認[？?]/g, '')
+          .trim();
+        if (!finalReply) finalReply = '收到！';
+        finalReply += ` 請提供你嘅${missingLabels}。`;
+        finalAction = 'COLLECT_BOOKING';
+        console.log('[v2/engine] Guard: stripped premature confirmation, missing:', missingLabels);
       }
     }
 
@@ -648,7 +652,7 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     const sideEffects = buildSideEffects(finalAction, finalMergedDraft, finalNewSlots, ctx);
 
     const result: AiEngineResult & { _rawLlmJson?: string } = {
-      replyText: validated.validatedReply,
+      replyText: finalReply,
       signals: {
         intents: [validated.intent as AiIntent],
         extractedFields: buildExtractedFields(finalNewSlots),
