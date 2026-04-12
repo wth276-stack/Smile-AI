@@ -607,44 +607,50 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
       finalMergedDraft.serviceDisplayName = finalNewSlots.serviceDisplayName;
     }
 
+    const requiredSlots = ['serviceName', 'date', 'time', 'customerName', 'phone'] as const;
+    const missingSlots = requiredSlots.filter((k) => !finalMergedDraft[k]);
+
     let finalAction = validated.action as string;
-    if (finalAction === 'CONFIRM_BOOKING' || finalAction === 'SUBMIT_BOOKING') {
-      const required = ['serviceName', 'date', 'time', 'customerName', 'phone'] as const;
-      const missing = required.filter((k) => !finalMergedDraft[k]);
-      if (missing.length > 0) {
-        console.log('[v2/engine] CONFIRM_BOOKING but missing:', missing);
-        finalAction = 'COLLECT_BOOKING';
-      }
+
+    if (validated.action === 'CONFIRM_BOOKING' && missingSlots.length > 0) {
+      console.log('[v2/engine] CONFIRM_BOOKING but missing:', missingSlots);
+
+      validated.action = 'COLLECT_BOOKING';
+
+      let fixedReply = validated.validatedReply
+        .replace(/[，。、]?\s*確認嗎[？?]?/g, '')
+        .replace(/[，。、]?\s*confirm\s*\??/gi, '')
+        .trim();
+
+      const slotLabel: Record<string, string> = {
+        phone: '電話號碼',
+        customerName: '姓名',
+        serviceName: '想預約嘅服務',
+        date: '日期',
+        time: '時間',
+      };
+      const askFor = missingSlots.map((s) => slotLabel[s] ?? s).join('、');
+      fixedReply += fixedReply.endsWith('。') ? '' : '。';
+      fixedReply += `請問你嘅${askFor}係？`;
+
+      validated.validatedReply = fixedReply;
+      console.log('[v2/engine] Reply fixed for missing slots:', fixedReply);
+    }
+
+    finalAction = validated.action as string;
+
+    if (finalAction === 'SUBMIT_BOOKING' && missingSlots.length > 0) {
+      console.log('[v2/engine] SUBMIT_BOOKING but missing:', missingSlots);
+      finalAction = 'COLLECT_BOOKING';
     }
     // Pass through MODIFY_BOOKING and CANCEL_BOOKING as-is
     if (finalAction === 'MODIFY_BOOKING' || finalAction === 'CANCEL_BOOKING') {
       // These don't need slot validation — bookingId is validated by validator.ts
     }
 
-    // ── Robust guard: strip premature confirmation when required slots missing ──
-    {
-      const _req = ['serviceName', 'date', 'time', 'customerName', 'phone'] as const;
-      const _missing = _req.filter((k) => !finalMergedDraft[k]);
-      const _trigger = /確認嗎|確認？|確認\?|confirm/i.test(validated.validatedReply);
-      console.log(
-        '[GUARD-DEBUG] validated.action=',
-        validated.action,
-        'finalAction=',
-        finalAction,
-        'phone=',
-        finalMergedDraft.phone,
-        'missing=',
-        _missing.join(',') || '(none)',
-        'triggerMatch=',
-        _trigger,
-        'replyPreview=',
-        validated.validatedReply?.substring(0, 60),
-      );
-    }
+    // ── Robust guard: strip premature confirmation when required slots missing (e.g. LLM said COLLECT_BOOKING but asked 確認嗎) ──
     let finalReply = validated.validatedReply;
     {
-      const requiredSlots = ['serviceName', 'date', 'time', 'customerName', 'phone'] as const;
-      const missingSlots = requiredSlots.filter((k) => !finalMergedDraft[k]);
       if (missingSlots.length > 0 && /確認嗎|確認？|確認\?|confirm/i.test(finalReply)) {
         const labelMap: Record<string, string> = {
           serviceName: '服務',
