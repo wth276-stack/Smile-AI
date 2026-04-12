@@ -136,8 +136,8 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   const dayOfWeek = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
 
   const personaExtras = [
-    tp?.assistantRole ? `- Personality style override: ${tp.assistantRole}` : '',
-    tp?.language ? `- Language preference: ${tp.language}` : '',
+    tp?.assistantRole ? `- Style: ${tp.assistantRole}` : '',
+    tp?.language ? `- Language: ${tp.language}` : '',
   ]
     .filter(Boolean)
     .join('\n');
@@ -146,11 +146,8 @@ export function buildSystemPrompt(ctx: PromptContext): string {
 Reply in the customer's language — default to Cantonese/Traditional Chinese.
 今日日期：${todayStr}（星期${dayOfWeek}）
 
-## Personality
-- Friendly and professional
-- Concise — keep replies short and natural for WhatsApp
-- Use emoji sparingly (1-2 per message at most)
-- Never sound robotic or scripted${personaExtras ? `\n${personaExtras}` : ''}
+## Voice
+- Friendly, professional, concise (WhatsApp); 1–2 emoji max if natural; avoid robotic tone.${personaExtras ? `\n${personaExtras}` : ''}
 
 ## Booking Flow Rules
 - Collect booking info through natural conversation, ONE piece at a time

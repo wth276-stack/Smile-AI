@@ -71,14 +71,54 @@ export class KnowledgeBaseService {
     });
   }
 
+  /** Max docs returned per search — keeps prompts bounded after ranking. */
+  private static readonly KB_SEARCH_MAX_RESULTS = 20;
+
+  /**
+   * Rank hits: title match > aliases > content (per keyword, best tier only).
+   * Empty / no-keyword query returns [] (no junk fallback).
+   */
+  private scoreKnowledgeHit(
+    doc: { title: string; content: string; aliases: string[] | null },
+    keywords: string[],
+  ): number {
+    let score = 0;
+    const titleLower = doc.title.toLowerCase();
+    const contentLower = doc.content.toLowerCase();
+    const aliases = doc.aliases ?? [];
+
+    for (const raw of keywords) {
+      const k = raw.trim();
+      if (!k) continue;
+      const kLower = k.toLowerCase();
+
+      if (titleLower.includes(kLower) || doc.title.includes(k)) {
+        score += 100;
+        continue;
+      }
+
+      const aliasHit = aliases.some((a) => {
+        const al = a.toLowerCase();
+        return al === kLower || al.includes(kLower) || kLower.includes(al);
+      });
+      if (aliasHit) {
+        score += 60;
+        continue;
+      }
+
+      if (contentLower.includes(kLower) || doc.content.includes(k)) {
+        score += 10;
+      }
+    }
+
+    return score;
+  }
+
   async search(tenantId: string, query: string): Promise<any[]> {
     const keywords = this.extractKeywords(query);
 
     if (keywords.length === 0) {
-      return this.prisma.knowledgeDocument.findMany({
-        where: { tenantId, isActive: true },
-        orderBy: { updatedAt: 'desc' },
-      });
+      return [];
     }
 
     const conditions = keywords.flatMap((kw) => [
@@ -93,18 +133,23 @@ export class KnowledgeBaseService {
         isActive: true,
         OR: conditions,
       },
-      orderBy: { updatedAt: 'desc' },
     });
 
-    // If keyword search misses, fall back to all active docs
     if (hits.length === 0) {
-      return this.prisma.knowledgeDocument.findMany({
-        where: { tenantId, isActive: true },
-        orderBy: { updatedAt: 'desc' },
-      });
+      return [];
     }
 
-    return hits;
+    const scored = hits.map((doc) => ({
+      doc,
+      score: this.scoreKnowledgeHit(doc, keywords),
+    }));
+
+    scored.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return b.doc.updatedAt.getTime() - a.doc.updatedAt.getTime();
+    });
+
+    return scored.slice(0, KnowledgeBaseService.KB_SEARCH_MAX_RESULTS).map((s) => s.doc);
   }
 
   private extractKeywords(message: string): string[] {
