@@ -622,6 +622,25 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     }
 
     // ── Robust guard: strip premature confirmation when required slots missing ──
+    {
+      const _req = ['serviceName', 'date', 'time', 'customerName', 'phone'] as const;
+      const _missing = _req.filter((k) => !finalMergedDraft[k]);
+      const _trigger = /確認嗎|確認？|確認\?|confirm/i.test(validated.validatedReply);
+      console.log(
+        '[GUARD-DEBUG] validated.action=',
+        validated.action,
+        'finalAction=',
+        finalAction,
+        'phone=',
+        finalMergedDraft.phone,
+        'missing=',
+        _missing.join(',') || '(none)',
+        'triggerMatch=',
+        _trigger,
+        'replyPreview=',
+        validated.validatedReply?.substring(0, 60),
+      );
+    }
     let finalReply = validated.validatedReply;
     {
       const requiredSlots = ['serviceName', 'date', 'time', 'customerName', 'phone'] as const;
