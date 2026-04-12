@@ -8,9 +8,12 @@ import type {
   BookingDraft,
   PromptContext,
   TenantProfile,
+  SideEffect,
+  SideEffectBookingChanges,
 } from './types';
 import { buildMessages } from './prompt';
 import { validateOutput } from './validator';
+import { buildBookingDateTime } from '../booking-state';
 
 const FALLBACK_REPLY = '抱歉，系統暫時遇到問題，請稍後再試 🙏';
 
@@ -18,6 +21,7 @@ const MAX_HISTORY = 10;
 const API_TIMEOUT_MS = 60_000;
 
 const EMPTY_DRAFT: BookingDraft = {
+  bookingId: null,
   serviceName: null,
   serviceDisplayName: null,
   date: null,
@@ -168,7 +172,82 @@ function buildPromptContext(input: AiEngineInput): PromptContext {
     contactName: input.contact.name ?? null,
     tenantSettings: input.tenant.settings ?? {},
     existingBookings: input.existingBookings,
+    activeBookingId: input.activeBookingId ?? input.bookingDraft?.bookingId ?? null,
   };
+}
+
+function buildModifyChangesFromDraft(
+  merged: BookingDraft,
+  newSlots: Partial<BookingDraft>,
+): SideEffectBookingChanges {
+  const changes: SideEffectBookingChanges = {};
+  if (newSlots.serviceName !== undefined && merged.serviceName) {
+    changes.serviceName = merged.serviceName;
+  }
+  const date = newSlots.date ?? merged.date;
+  const time = newSlots.time ?? merged.time;
+  if (date && time) {
+    try {
+      changes.startTime = buildBookingDateTime(date, time).toISOString();
+    } catch {
+      /* ignore invalid slot combo */
+    }
+  }
+  return changes;
+}
+
+/**
+ * V2 side effects for persistence (CREATE / MODIFY / CANCEL booking).
+ * SUBMIT_BOOKING → CREATE_BOOKING is the only path that writes a new booking row.
+ */
+function buildSideEffects(
+  finalAction: string,
+  draft: BookingDraft,
+  newSlots: Partial<BookingDraft>,
+  ctx: PromptContext,
+): SideEffect[] {
+  const effects: SideEffect[] = [];
+
+  if (finalAction === 'SUBMIT_BOOKING') {
+    if (draft.serviceName && draft.date && draft.time) {
+      let startTime: string;
+      try {
+        startTime = buildBookingDateTime(draft.date, draft.time).toISOString();
+      } catch {
+        startTime = `${draft.date}T${draft.time}:00`;
+      }
+      const serviceName = (draft.serviceDisplayName ?? draft.serviceName).trim();
+      effects.push({
+        type: 'CREATE_BOOKING',
+        data: {
+          serviceName,
+          startTime,
+        },
+      });
+    } else {
+      console.warn('[v2/engine] SUBMIT_BOOKING but draft incomplete — no side effect', {
+        serviceName: draft.serviceName,
+        date: draft.date,
+        time: draft.time,
+      });
+    }
+    return effects;
+  }
+
+  const bookingId = draft.bookingId ?? ctx.activeBookingId ?? undefined;
+  if (!bookingId) return effects;
+
+  if (finalAction === 'CANCEL_BOOKING') {
+    effects.push({ type: 'CANCEL_BOOKING', bookingId });
+    return effects;
+  }
+
+  if (finalAction === 'MODIFY_BOOKING') {
+    const changes = buildModifyChangesFromDraft(draft, newSlots);
+    effects.push({ type: 'MODIFY_BOOKING', bookingId, changes });
+  }
+
+  return effects;
 }
 
 function buildFallbackResult(durationMs: number): AiEngineResult {
@@ -259,6 +338,34 @@ function extractFromTruncatedJson(raw: string): LLMOutput | null {
   };
 }
 
+/** Calendar YYYY-MM-DD in Asia/Hong_Kong (not UTC ISO — avoids off-by-one vs local weekday). */
+export function formatHongKongYmd(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Hong_Kong',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}
+
+function getHongKongDayOfWeekIndex(d: Date): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Hong_Kong',
+    weekday: 'short',
+  }).formatToParts(d);
+  const w = parts.find((p) => p.type === 'weekday')?.value;
+  const map: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+  return w !== undefined && w in map ? map[w] : d.getDay();
+}
+
 export function resolveRelativeDates(text: string, today?: Date): string | null {
   const d = today ?? new Date();
   const dayLabels = ['日', '一', '二', '三', '四', '五', '六'];
@@ -270,8 +377,9 @@ export function resolveRelativeDates(text: string, today?: Date): string | null 
     return r;
   }
   function fmtResult(label: string, target: Date): string {
-    const iso = target.toISOString().split('T')[0];
-    return `${label} = ${iso}（星期${dayLabels[target.getDay()]}）`;
+    const ymd = formatHongKongYmd(target);
+    const hkDow = getHongKongDayOfWeekIndex(target);
+    return `${label} = ${ymd}（星期${dayLabels[hkDow]}）`;
   }
 
   const dayCharToNum: Record<string, number> = {
@@ -473,8 +581,10 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
       bookingDraft: (raw.bookingDraft ?? raw.newSlots ?? {}) as Partial<BookingDraft>,
     };
 
-    const validated = validateOutput(normalized, ctx);
-    const legacyAction = mapActionToLegacy(validated.action as string);
+    const validated = validateOutput(normalized, {
+      ...ctx,
+      confirmationPending: !!input.signals?.confirmationPending,
+    });
 
     if (validated.validationIssues.length > 0) {
       console.warn('[v2/engine] Validation issues:', validated.validationIssues);
@@ -512,6 +622,8 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     }
     const finalLegacyAction = mapActionToLegacy(finalAction);
 
+    const sideEffects = buildSideEffects(finalAction, finalMergedDraft, finalNewSlots, ctx);
+
     const result: AiEngineResult & { _rawLlmJson?: string } = {
       replyText: validated.validatedReply,
       signals: {
@@ -519,8 +631,9 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
         extractedFields: buildExtractedFields(finalNewSlots),
         action: finalLegacyAction,
         bookingDraft: finalMergedDraft,
+        confirmationPending: finalAction === 'CONFIRM_BOOKING',
       },
-      sideEffects: [],
+      sideEffects,
       shouldHandoff: finalAction === 'HANDOFF',
       analytics: {
         model,

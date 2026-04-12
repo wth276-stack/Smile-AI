@@ -1,14 +1,42 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ContactsService } from '../contacts/contacts.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import { KnowledgeRetrieverService } from './knowledge-retriever.service';
 import { ChatPersistenceService } from './chat-persistence.service';
 import { runAiEngine } from '@ats/ai-engine';
-import type { AiEngineInput } from '@ats/ai-engine';
+import type { AiEngineInput, AiEngineResult } from '@ats/ai-engine';
 import type { ChatMessageDto } from './dto/chat-message.dto';
 
 const FALLBACK_REPLY = '收到你嘅訊息，我哋同事會盡快回覆你，感謝耐心等候！';
+
+/** V2: prefer full LLM JSON from metadata for engine history (preserves action). Legacy rows use plain content. */
+function messageContentForAiEngine(m: { sender: string; content: string; metadata: unknown }): string {
+  if (m.sender !== 'AI') return m.content;
+  const meta = m.metadata as Record<string, unknown> | null | undefined;
+  const raw = meta && typeof meta.rawLlmJson === 'string' ? meta.rawLlmJson.trim() : '';
+  return raw.length > 0 ? raw : m.content;
+}
+
+/** Store raw LLM JSON in Message.metadata.rawLlmJson for next-turn V2 context; fallback synthetic JSON if needed. */
+function buildAiMessageMetadata(result: AiEngineResult): Prisma.InputJsonValue | undefined {
+  const r = result as AiEngineResult & { _rawLlmJson?: string; _v2Action?: string };
+  const raw = r._rawLlmJson;
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    return { rawLlmJson: raw };
+  }
+  if (typeof r._v2Action === 'string' && result.replyText) {
+    return {
+      rawLlmJson: JSON.stringify({
+        reply: result.replyText,
+        action: r._v2Action,
+        intent: result.signals?.intents?.[0] ?? 'OTHER',
+      }),
+    };
+  }
+  return undefined;
+}
 
 @Injectable()
 export class ChatService {
@@ -92,12 +120,13 @@ export class ChatService {
       },
       messages: recentMessages.map((m) => ({
         sender: m.sender as 'CUSTOMER' | 'AI' | 'HUMAN',
-        content: m.content,
+        content: messageContentForAiEngine(m),
         createdAt: m.createdAt.toISOString(),
       })),
       currentMessage: message,
       knowledge,
       bookingDraft,
+      activeBookingId: bookingDraft?.bookingId ?? undefined,
       signals: {
         conversationMode,
         confirmationPending,
@@ -134,7 +163,12 @@ export class ChatService {
       result.sideEffects,
     );
 
-    await this.conversations.addMessage(conversation.id, 'AI', result.replyText);
+    await this.conversations.addMessage(
+      conversation.id,
+      'AI',
+      result.replyText,
+      buildAiMessageMetadata(result),
+    );
     await this.persistence.saveAiRun(tenantId, conversation.id, result, effectExecution);
 
     // Decision Engine v1: Log stage and signals for debugging
@@ -148,7 +182,11 @@ export class ChatService {
       `trust=${sig.customerTrust ?? 'unknown'} ` +
       `strategy=${sig.strategy ?? 'unknown'} ` +
       `intents=${result.signals.intents} ` +
-      `aiRunStatus=${effectExecution.failures.some((f) => f.effect.type === 'CREATE_BOOKING') ? 'ERROR' : 'SUCCESS'}`,
+      `aiRunStatus=${effectExecution.failures.some((f) =>
+        ['CREATE_BOOKING', 'MODIFY_BOOKING', 'CANCEL_BOOKING'].includes(f.effect.type),
+      )
+        ? 'ERROR'
+        : 'SUCCESS'}`,
     );
 
     return {

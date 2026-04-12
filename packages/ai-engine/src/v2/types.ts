@@ -7,6 +7,7 @@ export type {
   AiIntent,
   AiAction,
   SideEffect,
+  SideEffectBookingChanges,
 } from '../types';
 
 import type { BookingDraft, KnowledgeChunk, AiIntent, AiAction } from '../types';
@@ -57,4 +58,6 @@ export interface PromptContext {
     endTime: Date | null;
     status: string;
   }>;
+  /** Booking id for MODIFY/CANCEL side effects (from input.activeBookingId or draft.bookingId). */
+  activeBookingId?: string | null;
 }

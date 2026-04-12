@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { PaginationDto } from '../../common/dto/pagination.dto';
 
@@ -72,9 +73,22 @@ export class ConversationsService {
     });
   }
 
-  async addMessage(conversationId: string, sender: 'CUSTOMER' | 'AI' | 'HUMAN', content: string) {
+  /**
+   * @param metadata Optional JSON (e.g. `{ rawLlmJson }` for V2 assistant turns — full LLM JSON for engine history).
+   */
+  async addMessage(
+    conversationId: string,
+    sender: 'CUSTOMER' | 'AI' | 'HUMAN',
+    content: string,
+    metadata?: Prisma.InputJsonValue,
+  ) {
     const message = await this.prisma.message.create({
-      data: { conversationId, sender, content },
+      data: {
+        conversationId,
+        sender,
+        content,
+        ...(metadata !== undefined ? { metadata } : {}),
+      },
     });
 
     await this.prisma.conversation.update({

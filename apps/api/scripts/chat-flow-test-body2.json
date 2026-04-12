@@ -1,0 +1,7 @@
+{
+  "tenantId": "demo-tenant",
+  "channel": "WEBCHAT",
+  "externalContactId": "flow-verify-hifu-session",
+  "contactName": "陳大文",
+  "message": "確認"
+}

@@ -17,6 +17,9 @@
     "db:studio": "pnpm --filter @ats/database exec prisma studio",
     "db:seed": "pnpm --filter @ats/database exec npx tsx prisma/seed.ts",
     "db:seed:demo": "pnpm --filter @ats/database exec npx tsx prisma/seed-demo.ts",
+    "set-tenant-settings": "ts-node --project tsconfig.scripts.json scripts/set-tenant-settings.ts",
+    "test-persona-switch": "ts-node --project tsconfig.scripts.json scripts/test-persona-switch.ts",
+    "test-booking-critical-path": "ts-node --project tsconfig.scripts.json scripts/test-booking-critical-path.ts",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:clean": "docker compose down -v",
@@ -24,6 +27,8 @@
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.2",
     "prettier": "^3.5.3",
     "prisma": "^6.4.1",
     "rimraf": "^6.0.1",

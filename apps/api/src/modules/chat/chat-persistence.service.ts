@@ -110,13 +110,18 @@ export class ChatPersistenceService {
     result: AiEngineResult,
     execution: SideEffectExecutionResult,
   ): Promise<void> {
-    const bookingFailure = execution.failures.find((f) => f.effect.type === 'CREATE_BOOKING');
+    const bookingFailure = execution.failures.find((f) =>
+      ['CREATE_BOOKING', 'MODIFY_BOOKING', 'CANCEL_BOOKING'].includes(f.effect.type),
+    );
     const status = bookingFailure ? 'ERROR' : 'SUCCESS';
-    const error = bookingFailure ? `CREATE_BOOKING failed: ${bookingFailure.message}` : null;
+    const error = bookingFailure
+      ? `${bookingFailure.effect.type} failed: ${bookingFailure.message}`
+      : null;
 
-    const signalsToSave = bookingFailure
-      ? buildPersistedSignals(result.signals, bookingFailure)
-      : (result.signals as unknown as Record<string, unknown>);
+    const signalsToSave =
+      bookingFailure?.effect.type === 'CREATE_BOOKING'
+        ? buildPersistedSignals(result.signals, bookingFailure)
+        : (result.signals as unknown as Record<string, unknown>);
 
     await this.prisma.aiRun.create({
       data: {
@@ -170,6 +175,16 @@ export class ChatPersistenceService {
 
           case 'UPDATE_CONTACT':
             await this.contacts.update(tenantId, contactId, effect.data);
+            succeeded.push(effect);
+            break;
+
+          case 'MODIFY_BOOKING':
+            await this.bookings.modifyBooking(tenantId, effect.bookingId, effect.changes);
+            succeeded.push(effect);
+            break;
+
+          case 'CANCEL_BOOKING':
+            await this.bookings.cancelBooking(tenantId, effect.bookingId);
             succeeded.push(effect);
             break;
         }

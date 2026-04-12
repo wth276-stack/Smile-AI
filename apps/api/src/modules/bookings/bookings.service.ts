@@ -94,4 +94,60 @@ export class BookingsService {
       data,
     });
   }
+
+  /**
+   * AI MODIFY_BOOKING path: scoped to tenant; maps ISO strings to Date for Prisma.
+   */
+  async modifyBooking(
+    tenantId: string,
+    bookingId: string,
+    changes: {
+      serviceName?: string;
+      startTime?: string;
+      endTime?: string;
+      notes?: string;
+    },
+  ) {
+    const existing = await this.prisma.booking.findFirst({
+      where: { id: bookingId, tenantId },
+    });
+    if (!existing) {
+      throw new Error(`Booking not found: ${bookingId}`);
+    }
+
+    const data: {
+      serviceName?: string;
+      startTime?: Date;
+      endTime?: Date | null;
+      notes?: string | null;
+    } = {};
+    if (changes.serviceName !== undefined) data.serviceName = changes.serviceName;
+    if (changes.startTime !== undefined) data.startTime = new Date(changes.startTime);
+    if (changes.endTime !== undefined) {
+      data.endTime = changes.endTime ? new Date(changes.endTime) : null;
+    }
+    if (changes.notes !== undefined) data.notes = changes.notes;
+
+    if (Object.keys(data).length === 0) {
+      return existing;
+    }
+
+    return this.prisma.booking.update({
+      where: { id: bookingId },
+      data,
+    });
+  }
+
+  async cancelBooking(tenantId: string, bookingId: string) {
+    const existing = await this.prisma.booking.findFirst({
+      where: { id: bookingId, tenantId },
+    });
+    if (!existing) {
+      throw new Error(`Booking not found: ${bookingId}`);
+    }
+    return this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { status: 'CANCELLED' },
+    });
+  }
 }

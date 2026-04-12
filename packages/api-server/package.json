@@ -1,7 +1,7 @@
 {
   "name": "api-server",
   "version": "1.0.0",
-  "description": "",
+  "description": "Standalone Express dev/demo server — not the production Nest API (see README).",
   "main": "index.js",
   "scripts": {
     "dev": "npx tsx src/index.ts",

@@ -75,6 +75,8 @@ export interface AiEngineInput {
     confirmationPending?: boolean;
     [key: string]: unknown;
   };
+  /** Resolved booking to modify/cancel (e.g. from draft or UI selection); falls back to bookingDraft.bookingId in engine */
+  activeBookingId?: string | null;
 }
 
 export interface AiMessageContext {
@@ -167,8 +169,20 @@ export type AiAction =
   | 'CREATE_BOOKING'
   | 'UPDATE_CONTACT';
 
+/**
+ * Subset of booking fields for MODIFY_BOOKING (ISO strings for datetimes; maps to Prisma `Booking` update).
+ */
+export type SideEffectBookingChanges = {
+  serviceName?: string;
+  startTime?: string;
+  endTime?: string;
+  notes?: string;
+};
+
 export type SideEffect =
   | { type: 'CREATE_BOOKING'; data: { serviceName: string; startTime: string; endTime?: string; notes?: string } }
+  | { type: 'MODIFY_BOOKING'; bookingId: string; changes: SideEffectBookingChanges }
+  | { type: 'CANCEL_BOOKING'; bookingId: string }
   | { type: 'UPDATE_CONTACT'; data: { name?: string; phone?: string; email?: string } };
 
 export interface AiRunAnalytics {

@@ -27,6 +27,12 @@ import mediaRoutes from './media-routes';
 console.log('[api-server] adminRouter loaded:', typeof adminRouter);
 import type { AiEngineInput, KnowledgeChunk, BookingDraft } from '../../ai-engine/src/types';
 
+if (process.env.NODE_ENV === 'production') {
+  console.warn(
+    '[api-server] NODE_ENV=production: this standalone Express app is for dev/demo. Prefer apps/api (Nest) for production.',
+  );
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());

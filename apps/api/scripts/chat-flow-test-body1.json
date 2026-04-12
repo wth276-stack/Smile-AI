@@ -1,0 +1,7 @@
+{
+  "tenantId": "demo-tenant",
+  "channel": "WEBCHAT",
+  "externalContactId": "flow-verify-hifu-session",
+  "contactName": "陳大文",
+  "message": "我想預約HIFU 緊緻提升療程，5月9號11點，我叫陳大文，電話91234567"
+}
