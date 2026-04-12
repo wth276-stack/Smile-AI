@@ -104,7 +104,7 @@ export default function SettingsPage() {
       }
       setAssistantRole(ar);
       const langMatch = LANGUAGE_OPTIONS.find((o) => o.value === lang);
-      setLanguage(langMatch ? lang.value : lang);
+      setLanguage(langMatch ? langMatch.value : lang);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '無法載入設定');
     } finally {
