@@ -15,7 +15,7 @@ COPY packages/channel-adapters/package.json ./packages/channel-adapters/
 
 RUN pnpm install --frozen-lockfile
 
-RUN echo "RAILWAY_V3_UNIQUE_MARKER"
+RUN echo "RAILWAY_V3_REBUILD_20260412160433"
 
 COPY . .
 
