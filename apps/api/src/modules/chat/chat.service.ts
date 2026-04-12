@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { ContactsService } from '../contacts/contacts.service';
@@ -8,6 +9,7 @@ import { ChatPersistenceService } from './chat-persistence.service';
 import { runAiEngine } from '@ats/ai-engine';
 import type { AiEngineInput, AiEngineResult } from '@ats/ai-engine';
 import type { ChatMessageDto } from './dto/chat-message.dto';
+import type { PublicChatDto } from './dto/public-chat.dto';
 
 const FALLBACK_REPLY = '收到你嘅訊息，我哋同事會盡快回覆你，感謝耐心等候！';
 
@@ -49,6 +51,50 @@ export class ChatService {
     private readonly knowledgeRetriever: KnowledgeRetrieverService,
     private readonly persistence: ChatPersistenceService,
   ) {}
+
+  /**
+   * Public embed chat: tenant id = tenantSlug (no separate slug column).
+   * Reuses handleInboundMessage — same contact+conversation resolution as authenticated chat.
+   */
+  async handlePublicMessage(dto: PublicChatDto): Promise<{ reply: string; conversationId: string }> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: dto.tenantSlug.trim() } });
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    let externalContactId: string;
+
+    if (dto.conversationId?.trim()) {
+      const conv = await this.prisma.conversation.findFirst({
+        where: { id: dto.conversationId.trim(), tenantId: tenant.id },
+        include: { contact: true },
+      });
+      if (!conv) {
+        throw new NotFoundException('Conversation not found');
+      }
+      const ext = conv.contact.externalIds as Record<string, unknown> | null;
+      const web = ext && typeof ext === 'object' && ext !== null ? ext.webchat : undefined;
+      if (typeof web !== 'string' || !web.trim()) {
+        throw new NotFoundException('Invalid contact for conversation');
+      }
+      externalContactId = web;
+    } else {
+      externalContactId = `webpub-${randomUUID()}`;
+    }
+
+    const result = await this.handleInboundMessage({
+      tenantId: tenant.id,
+      channel: 'WEBCHAT',
+      externalContactId,
+      contactName: 'Website Visitor',
+      message: dto.message.trim(),
+    });
+
+    return {
+      reply: result.reply,
+      conversationId: result.conversationId,
+    };
+  }
 
   async handleInboundMessage(dto: ChatMessageDto) {
     const { tenantId, channel, externalContactId, contactName, message } = dto;
