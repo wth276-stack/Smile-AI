@@ -8,7 +8,7 @@
     "skipLibCheck": true,
     "resolveJsonModule": true
   },
-  "include": ["scripts/**/*.ts"],
+  "include": ["scripts/**/*.ts", "tests/**/*.ts"],
   "ts-node": {
     "transpileOnly": true
   }

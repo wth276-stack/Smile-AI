@@ -20,6 +20,7 @@
     "set-tenant-settings": "ts-node --project tsconfig.scripts.json scripts/set-tenant-settings.ts",
     "test-persona-switch": "ts-node --project tsconfig.scripts.json scripts/test-persona-switch.ts",
     "test-booking-critical-path": "ts-node --project tsconfig.scripts.json scripts/test-booking-critical-path.ts",
+    "phase1-verify": "tsx tests/phase1-verify.ts",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:clean": "docker compose down -v",
