@@ -7,7 +7,8 @@ import { ConversationsService } from '../conversations/conversations.service';
 import { KnowledgeRetrieverService } from './knowledge-retriever.service';
 import { ChatPersistenceService } from './chat-persistence.service';
 import { runAiEngine } from '@ats/ai-engine';
-import type { AiEngineInput, AiEngineResult } from '@ats/ai-engine';
+import type { AiEngineInput, AiEngineResult, BookingDraft } from '@ats/ai-engine';
+import { getConversationBookingState, updateBookingDraft } from '@ats/database';
 import type { ChatMessageDto } from './dto/chat-message.dto';
 import type { PublicChatDto } from './dto/public-chat.dto';
 
@@ -115,12 +116,14 @@ export class ChatService {
     const recentMessages = await this.conversations.getRecentMessages(conversation.id, 20);
     const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
 
-    // Load full conversation state (draft + mode + confirmationPending + signals)
+    // Load full conversation state (AiRun) + V2 booking mirror in conversation.metadata (api-server parity)
     const conversationState = await this.persistence.loadConversationState(conversation.id);
+    const metaState = await getConversationBookingState(conversation.id);
+    const bookingDraftMeta = metaState.bookingDraft as BookingDraft | null | undefined;
     const {
-      bookingDraft,
+      bookingDraft: bookingDraftFromRun,
       conversationMode,
-      confirmationPending,
+      confirmationPending: confirmationFromRun,
       // Decision Engine v1: load customer signals
       conversationStage,
       customerEmotion,
@@ -129,6 +132,9 @@ export class ChatService {
       customerTrust,
       customerStyle,
     } = conversationState;
+
+    const bookingDraft = bookingDraftMeta ?? bookingDraftFromRun;
+    const confirmationPending = metaState.confirmationPending || confirmationFromRun;
 
     const knowledge = await this.knowledgeRetriever.retrieveForMessage(
       tenantId,
@@ -217,6 +223,20 @@ export class ChatService {
       buildAiMessageMetadata(result),
     );
     await this.persistence.saveAiRun(tenantId, conversation.id, result, effectExecution);
+
+    try {
+      await updateBookingDraft(
+        conversation.id,
+        result.signals.bookingDraft as Prisma.InputJsonValue | undefined,
+        !!result.signals.confirmationPending,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Failed to update conversation booking metadata: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    await this.persistence.resetConfirmationPendingAfterBookingEffects(conversation.id, effectExecution);
 
     // Decision Engine v1: Log stage and signals for debugging
     const sig = result.signals as any;

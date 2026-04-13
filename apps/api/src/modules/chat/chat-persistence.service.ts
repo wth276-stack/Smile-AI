@@ -3,6 +3,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { ContactsService } from '../contacts/contacts.service';
 import { BookingsService } from '../bookings/bookings.service';
 import type { AiEngineResult, SideEffect, BookingDraft, DetectedSignals } from '@ats/ai-engine';
+import { updateBookingDraft } from '@ats/database';
 
 /** Outcome of executing engine side effects (auditable; drives AiRun.status). */
 export interface SideEffectExecutionResult {
@@ -214,6 +215,28 @@ export class ChatPersistenceService {
     }
 
     return { succeeded, failures };
+  }
+
+  /**
+   * After CREATE/MODIFY/CANCEL booking side effects succeed, clear confirmationPending in
+   * conversation.metadata (aligns with packages/api-server post-booking reset).
+   * Call after saveAiRun + updateBookingDraft(full) in ChatService.
+   */
+  async resetConfirmationPendingAfterBookingEffects(
+    conversationId: string,
+    execution: SideEffectExecutionResult,
+  ): Promise<void> {
+    const hasBookingMutation = execution.succeeded.some((e) =>
+      ['CREATE_BOOKING', 'MODIFY_BOOKING', 'CANCEL_BOOKING'].includes(e.type),
+    );
+    if (!hasBookingMutation) return;
+    try {
+      await updateBookingDraft(conversationId, undefined, false);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to reset confirmationPending after booking side effect: ${errMsg(err)}`,
+      );
+    }
   }
 }
 

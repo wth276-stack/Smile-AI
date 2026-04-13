@@ -227,7 +227,7 @@ export function validateOutput(
     cd?.time &&
     cd?.customerName &&
     cd?.phone &&
-    /好|ok|確認|confirm|係|冇問題|無問題|submit|啱|正確|得|可以|搞掂/i.test(currentMessage)
+    /好|ok|確認|confirm|係呀|係啊|係嘅|冇問題|無問題|submit|啱|正確|得|可以|搞掂/i.test(currentMessage)
   ) {
     action = 'SUBMIT_BOOKING';
     issues.push('Override: REPLY → SUBMIT_BOOKING (all slots filled + user confirmed)');
