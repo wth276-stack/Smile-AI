@@ -150,6 +150,7 @@ export class ChatPersistenceService {
     tenantId: string,
     contactId: string,
     effects: SideEffect[],
+    bookingDraft?: BookingDraft,
   ): Promise<SideEffectExecutionResult> {
     const succeeded: SideEffect[] = [];
     const failures: Array<{ effect: SideEffect; message: string }> = [];
@@ -164,6 +165,23 @@ export class ChatPersistenceService {
               endTime: effect.data.endTime ? new Date(effect.data.endTime) : undefined,
               notes: effect.data.notes,
             });
+
+            if (bookingDraft) {
+              const contactUpdate: { name?: string; phone?: string } = {};
+              if (bookingDraft.customerName) contactUpdate.name = bookingDraft.customerName;
+              if (bookingDraft.phone) contactUpdate.phone = bookingDraft.phone;
+              if (Object.keys(contactUpdate).length > 0) {
+                try {
+                  await this.contacts.update(tenantId, contactId, contactUpdate);
+                  this.logger.log(
+                    `Updated contact ${contactId} from booking draft: ${JSON.stringify(contactUpdate)}`,
+                  );
+                } catch (err) {
+                  this.logger.warn(`Failed to update contact from booking draft: ${errMsg(err)}`);
+                }
+              }
+            }
+
             succeeded.push(effect);
             if (!created) {
               this.logger.log(

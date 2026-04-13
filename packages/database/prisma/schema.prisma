@@ -7,180 +7,40 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ╔══════════════════════════════════════════════════════════════╗
-// ║  ENUMS — all phases defined upfront to avoid ALTER TYPE     ║
-// ╚══════════════════════════════════════════════════════════════╝
-
-enum UserRole {
-  OWNER
-  ADMIN
-  STAFF
-}
-
-enum ChannelType {
-  WHATSAPP
-  INSTAGRAM
-  FACEBOOK
-  WEBCHAT
-  EMAIL // P2
-}
-
-enum ConversationStatus {
-  OPEN
-  CLOSED
-  ARCHIVED
-  HANDED_OFF // P2
-}
-
-enum MessageSender {
-  CUSTOMER
-  AI
-  HUMAN
-}
-
-enum MessageContentType {
-  TEXT
-  IMAGE
-  FILE
-  LOCATION
-  TEMPLATE
-}
-
-enum OrderStatus {
-  DRAFT
-  CONFIRMED
-  PAID
-  SHIPPED
-  DELIVERED
-  CANCELLED
-}
-
-enum BookingStatus {
-  PENDING
-  CONFIRMED
-  COMPLETED
-  NO_SHOW
-  CANCELLED
-}
-
-enum FollowUpStatus {
-  PENDING
-  DONE
-  SKIPPED
-  OVERDUE
-}
-
-enum FollowUpType {
-  DELIVERY_REMINDER
-  APPOINTMENT_REMINDER
-  PAYMENT_FOLLOW_UP
-  GENERAL_FOLLOW_UP
-  RE_ENGAGEMENT // P2
-}
-
-enum ReminderTarget {
-  OWNER
-  CUSTOMER
-}
-
-enum ReminderStatus {
-  SCHEDULED
-  SENT
-  CANCELLED
-}
-
-enum AiRunStatus {
-  SUCCESS
-  ERROR
-  TIMEOUT
-  FILTERED
-}
-
-enum DocType {
-  SERVICE
-  FAQ
-  GENERAL
-}
-
-// P2 enums — defined now, used later
-enum LeadStage {
-  NEW
-  ENGAGING
-  QUALIFYING
-  QUOTING
-  NEGOTIATING
-  CLOSING
-  WON
-  LOST
-  DORMANT
-}
-
-enum HandoffReason {
-  CUSTOMER_REQUEST
-  COMPLEX_QUERY
-  HIGH_VALUE_DEAL
-  COMPLAINT
-  AI_UNSURE
-  REPEATED_OBJECTION
-}
-
-enum ObjectionType {
-  PRICE
-  TIMING
-  NEED
-  TRUST
-  COMPETITOR
-  AUTHORITY
-}
-
-// P3 enums
-enum DecisionStyle {
-  ANALYTICAL
-  DRIVER
-  EXPRESSIVE
-  AMIABLE
-}
-
-// ╔══════════════════════════════════════════════════════════════╗
-// ║  PHASE 1 MODELS                                            ║
-// ╚══════════════════════════════════════════════════════════════╝
-
 model Tenant {
-  id        String   @id @default(cuid())
-  name      String
-  plan      String   @default("STARTER") // STARTER | GROWTH | ELITE
-  domain    String?  @unique
-  settings  Json     @default("{}")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  users         User[]
-  contacts      Contact[]
-  conversations Conversation[]
-  orders        Order[]
-  bookings      Booking[]
-  followUpTasks FollowUpTask[]
-  reminders     Reminder[]
-  aiRuns        AiRun[]
-  knowledgeDocs KnowledgeDocument[]
+  id             String              @id @default(cuid())
+  name           String
+  plan           String              @default("STARTER")
+  domain         String?             @unique
+  settings       Json                @default("{}")
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  aiRuns         AiRun[]
+  bookings       Booking[]
   channelConfigs ChannelConfig[]
+  contacts       Contact[]
+  conversations  Conversation[]
+  followUpTasks  FollowUpTask[]
+  knowledgeDocs  KnowledgeDocument[]
+  orders         Order[]
+  reminders      Reminder[]
+  users          User[]
 
   @@map("tenants")
 }
 
 model User {
-  id           String   @id @default(cuid())
+  id           String     @id @default(cuid())
   tenantId     String
   email        String
   passwordHash String
   name         String
-  role         UserRole @default(STAFF)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  tenant    Tenant     @relation(fields: [tenantId], references: [id])
-  reminders Reminder[]
+  role         UserRole   @default(STAFF)
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  reminders    Reminder[]
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -188,30 +48,26 @@ model User {
 }
 
 model Contact {
-  id          String   @id @default(cuid())
-  tenantId    String
-  name        String?
-  phone       String?
-  email       String?
-  externalIds Json     @default("{}") // { whatsapp: "...", ig: "..." }
-  tags        String[] @default([])
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // P2 fields — nullable, added later
-  leadStage  LeadStage? // P2
-  leadScore  Int?       // P2
-
+  id            String         @id @default(cuid())
+  tenantId      String
+  name          String?
+  phone         String?
+  email         String?
+  externalIds   Json           @default("{}")
+  tags          String[]       @default([])
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  leadStage     LeadStage?
+  leadScore     Int?
+  bookings      Booking[]
   tenant        Tenant         @relation(fields: [tenantId], references: [id])
   conversations Conversation[]
-  orders        Order[]
-  bookings      Booking[]
   followUpTasks FollowUpTask[]
+  orders        Order[]
 
   @@index([tenantId])
   @@index([tenantId, phone])
-  @@unique([tenantId, phone])
   @@index([tenantId, email])
   @@map("contacts")
 }
@@ -222,17 +78,16 @@ model Conversation {
   contactId  String
   channel    ChannelType
   status     ConversationStatus @default(OPEN)
-  externalId String?            // channel-specific thread ID
-  summary    String?            // P2: AI-generated summary
+  externalId String?
+  summary    String?
   metadata   Json               @default("{}")
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt
   closedAt   DateTime?
-
-  tenant   Tenant    @relation(fields: [tenantId], references: [id])
-  contact  Contact   @relation(fields: [contactId], references: [id])
-  messages Message[]
-  aiRuns   AiRun[]
+  aiRuns     AiRun[]
+  contact    Contact            @relation(fields: [contactId], references: [id])
+  tenant     Tenant             @relation(fields: [tenantId], references: [id])
+  messages   Message[]
 
   @@index([tenantId])
   @@index([tenantId, status])
@@ -246,10 +101,9 @@ model Message {
   sender         MessageSender
   contentType    MessageContentType @default(TEXT)
   content        String
-  metadata       Json               @default("{}") // media URLs, template params, etc.
+  metadata       Json               @default("{}")
   createdAt      DateTime           @default(now())
-
-  conversation Conversation @relation(fields: [conversationId], references: [id])
+  conversation   Conversation       @relation(fields: [conversationId], references: [id])
 
   @@index([conversationId])
   @@index([conversationId, createdAt])
@@ -261,15 +115,14 @@ model Order {
   tenantId  String
   contactId String
   status    OrderStatus @default(DRAFT)
-  items     Json        @default("[]") // P1 simplification: [{name, qty, unitPrice}]
+  items     Json        @default("[]")
   total     Decimal     @db.Decimal(10, 2)
   currency  String      @default("HKD")
   notes     String?
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
-
-  tenant  Tenant  @relation(fields: [tenantId], references: [id])
-  contact Contact @relation(fields: [contactId], references: [id])
+  contact   Contact     @relation(fields: [contactId], references: [id])
+  tenant    Tenant      @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, status])
@@ -290,9 +143,8 @@ model Booking {
   idempotencyKey String?       @unique @map("idempotency_key")
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
-
-  tenant  Tenant  @relation(fields: [tenantId], references: [id])
-  contact Contact @relation(fields: [contactId], references: [id])
+  contact        Contact       @relation(fields: [contactId], references: [id])
+  tenant         Tenant        @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, startTime])
@@ -301,7 +153,7 @@ model Booking {
 }
 
 model FollowUpTask {
-  id        String       @id @default(cuid())
+  id        String         @id @default(cuid())
   tenantId  String
   contactId String
   type      FollowUpType
@@ -309,11 +161,10 @@ model FollowUpTask {
   dueAt     DateTime
   title     String
   notes     String?
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-
-  tenant  Tenant  @relation(fields: [tenantId], references: [id])
-  contact Contact @relation(fields: [contactId], references: [id])
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  contact   Contact        @relation(fields: [contactId], references: [id])
+  tenant    Tenant         @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, status])
@@ -332,9 +183,8 @@ model Reminder {
   sendAt    DateTime
   sentAt    DateTime?
   createdAt DateTime       @default(now())
-
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  user   User   @relation(fields: [userId], references: [id])
+  tenant    Tenant         @relation(fields: [tenantId], references: [id])
+  user      User           @relation(fields: [userId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, sendAt])
@@ -342,23 +192,22 @@ model Reminder {
 }
 
 model AiRun {
-  id                  String      @id @default(cuid())
-  tenantId            String
-  conversationId      String
-  status              AiRunStatus
-  model               String      // e.g. "gpt-4o-mini"
-  inputTokens         Int         @default(0)
-  outputTokens        Int         @default(0)
-  durationMs          Int         @default(0)
-  signals             Json        @default("{}") // detected intents, objections, etc.
-  sideEffects         Json        @default("[]") // CRM actions taken
+  id                 String       @id @default(cuid())
+  tenantId           String
+  conversationId     String
+  status             AiRunStatus
+  model              String
+  inputTokens        Int          @default(0)
+  outputTokens       Int          @default(0)
+  durationMs         Int          @default(0)
+  signals            Json         @default("{}")
+  sideEffects        Json         @default("[]")
   /// Failed side effects (type + message) for audit when execution partially fails
-  sideEffectFailures  Json?       @map("side_effect_failures")
-  error               String?
-  createdAt           DateTime    @default(now())
-
-  tenant       Tenant       @relation(fields: [tenantId], references: [id])
-  conversation Conversation @relation(fields: [conversationId], references: [id])
+  sideEffectFailures Json?        @map("side_effect_failures")
+  error              String?
+  createdAt          DateTime     @default(now())
+  conversation       Conversation @relation(fields: [conversationId], references: [id])
+  tenant             Tenant       @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([conversationId])
@@ -367,44 +216,27 @@ model AiRun {
 }
 
 model KnowledgeDocument {
-  id        String   @id @default(cuid())
-  tenantId  String
-  title     String
-
-  // Document type for differentiated handling
-  docType   DocType  @default(GENERAL)
-
-  // Structured fields for service details (Phase 1.5C)
-  // These allow precise section-aware retrieval
-  effect      String?  // 功效
-  suitable    String?  // 適合對象
-  unsuitable  String?  // 不適合對象
-  precaution  String?  // 注意事項
-  duration    String?  // 時長
-
-  // Pricing fields
-  price         String?  // 價錢
-  discountPrice String?  // 優惠價
-
-  // Steps - array of step descriptions
-  steps      String[]  @default([])
-
-  // FAQ items - array of {question, answer}
-  faqItems   Json?    @map("faq_items")
-
-  // Service aliases for matching (e.g., ["facial", "清潔facial", "深層清潔"])
-  aliases   String[] @default([])
-
-  // Legacy/free-text field (backward compatible)
-  content   String
-
-  category  String?
-  tags      String[] @default([])
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  id            String   @id @default(cuid())
+  tenantId      String
+  title         String
+  content       String
+  category      String?
+  tags          String[] @default([])
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  duration      String?
+  effect        String?
+  precaution    String?
+  suitable      String?
+  unsuitable    String?
+  docType       DocType  @default(GENERAL)
+  discountPrice String?
+  faqItems      Json?    @map("faq_items")
+  price         String?
+  steps         String[] @default([])
+  aliases       String[] @default([])
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, category])
@@ -412,17 +244,16 @@ model KnowledgeDocument {
 }
 
 model ChannelConfig {
-  id         String      @id @default(cuid())
-  tenantId   String
-  channel    ChannelType
-  isActive   Boolean     @default(false)
-  credentials Json       @default("{}") // encrypted API keys, tokens
-  webhookUrl String?
-  settings   Json        @default("{}") // channel-specific settings
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  id          String      @id @default(cuid())
+  tenantId    String
+  channel     ChannelType
+  isActive    Boolean     @default(false)
+  credentials Json        @default("{}")
+  webhookUrl  String?
+  settings    Json        @default("{}")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, channel])
   @@index([tenantId])
@@ -432,9 +263,9 @@ model ChannelConfig {
 model BusinessHours {
   id           String   @id @default(cuid())
   tenantId     String
-  dayOfWeek    Int      // 0=Sunday, 1=Monday, ... 6=Saturday
-  openTime     String   // "10:00"
-  closeTime    String   // "20:00"
+  dayOfWeek    Int
+  openTime     String
+  closeTime    String
   isClosed     Boolean  @default(false)
   slotDuration Int      @default(60)
   createdAt    DateTime @default(now())
@@ -481,21 +312,130 @@ model MediaMessage {
   @@map("media_messages")
 }
 
-// ╔══════════════════════════════════════════════════════════════╗
-// ║  PHASE 2 MODELS — uncomment when ready                     ║
-// ╚══════════════════════════════════════════════════════════════╝
+enum UserRole {
+  OWNER
+  ADMIN
+  STAFF
+}
 
-// model Playbook { ... }
-// model HandoffLog { ... }
-// model ObjectionEvent { ... }
-// model LeadScore { ... }
-// model ScoringRule { ... }
-// model SalesAction { ... }
-// model ConversationSummary { ... }
+enum ChannelType {
+  WHATSAPP
+  INSTAGRAM
+  FACEBOOK
+  WEBCHAT
+  EMAIL
+}
 
-// ╔══════════════════════════════════════════════════════════════╗
-// ║  PHASE 3 MODELS — uncomment when ready                     ║
-// ╚══════════════════════════════════════════════════════════════╝
+enum ConversationStatus {
+  OPEN
+  CLOSED
+  ARCHIVED
+  HANDED_OFF
+}
 
-// model DecisionIdentityProfile { ... }
-// model UpsellRule { ... }
+enum MessageSender {
+  CUSTOMER
+  AI
+  HUMAN
+}
+
+enum MessageContentType {
+  TEXT
+  IMAGE
+  FILE
+  LOCATION
+  TEMPLATE
+}
+
+enum OrderStatus {
+  DRAFT
+  CONFIRMED
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  NO_SHOW
+  CANCELLED
+}
+
+enum FollowUpStatus {
+  PENDING
+  DONE
+  SKIPPED
+  OVERDUE
+}
+
+enum FollowUpType {
+  DELIVERY_REMINDER
+  APPOINTMENT_REMINDER
+  PAYMENT_FOLLOW_UP
+  GENERAL_FOLLOW_UP
+  RE_ENGAGEMENT
+}
+
+enum ReminderTarget {
+  OWNER
+  CUSTOMER
+}
+
+enum ReminderStatus {
+  SCHEDULED
+  SENT
+  CANCELLED
+}
+
+enum AiRunStatus {
+  SUCCESS
+  ERROR
+  TIMEOUT
+  FILTERED
+}
+
+enum DocType {
+  SERVICE
+  FAQ
+  GENERAL
+}
+
+enum LeadStage {
+  NEW
+  ENGAGING
+  QUALIFYING
+  QUOTING
+  NEGOTIATING
+  CLOSING
+  WON
+  LOST
+  DORMANT
+}
+
+enum HandoffReason {
+  CUSTOMER_REQUEST
+  COMPLEX_QUERY
+  HIGH_VALUE_DEAL
+  COMPLAINT
+  AI_UNSURE
+  REPEATED_OBJECTION
+}
+
+enum ObjectionType {
+  PRICE
+  TIMING
+  NEED
+  TRUST
+  COMPETITOR
+  AUTHORITY
+}
+
+enum DecisionStyle {
+  ANALYTICAL
+  DRIVER
+  EXPRESSIVE
+  AMIABLE
+}

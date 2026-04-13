@@ -80,21 +80,36 @@ export async function saveMessages(
   });
 }
 
-export async function getBookingDraft(
-  conversationId: string,
-): Promise<Record<string, unknown> | null> {
+/** Booking draft + confirmation flag for V2 engine (webchat / api-server). */
+export async function getConversationBookingState(conversationId: string): Promise<{
+  bookingDraft: Record<string, unknown> | null;
+  confirmationPending: boolean;
+}> {
   const conv = await prisma.conversation.findUnique({
     where: { id: conversationId },
     select: { metadata: true },
   });
-  if (!conv?.metadata) return null;
+  if (!conv?.metadata) {
+    return { bookingDraft: null, confirmationPending: false };
+  }
   const meta = conv.metadata as Record<string, unknown>;
-  return (meta.bookingDraft as Record<string, unknown>) ?? null;
+  return {
+    bookingDraft: (meta.bookingDraft as Record<string, unknown>) ?? null,
+    confirmationPending: !!meta.confirmationPending,
+  };
+}
+
+export async function getBookingDraft(
+  conversationId: string,
+): Promise<Record<string, unknown> | null> {
+  const { bookingDraft } = await getConversationBookingState(conversationId);
+  return bookingDraft;
 }
 
 export async function updateBookingDraft(
   conversationId: string,
-  draft: Prisma.InputJsonValue,
+  draft: Prisma.InputJsonValue | undefined,
+  confirmationPending: boolean | undefined,
 ) {
   const conv = await prisma.conversation.findUnique({
     where: { id: conversationId },
@@ -105,7 +120,8 @@ export async function updateBookingDraft(
 
   const metaToSave = {
     ...existingMeta,
-    bookingDraft: draft,
+    ...(draft !== undefined && { bookingDraft: draft }),
+    confirmationPending: !!confirmationPending,
   } as any;
 
   await prisma.conversation.update({

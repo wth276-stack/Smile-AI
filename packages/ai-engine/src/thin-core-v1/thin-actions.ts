@@ -14,6 +14,13 @@ import { collectSideEffects, type EngineResponse } from '../response-composer';
 import type { ThinLlmOutput } from './thin-types';
 import { getThinBookingReferenceDate } from './thin-deterministic-datetime';
 
+/** Normalize empty/whitespace LLM output to null so ?? fallback works correctly */
+function orNull(v: string | null | undefined): string | null {
+  if (v == null) return null;
+  const trimmed = String(v).trim();
+  return trimmed.length > 0 && trimmed !== 'null' ? trimmed : null;
+}
+
 function mapIntentToAiIntent(intent: string, nextAction: ThinLlmOutput['nextAction']): AiIntent[] {
   if (nextAction === 'handoff') return ['OTHER'];
   if (
@@ -35,12 +42,12 @@ export function mergeBookingDraftFromThin(
 ): BookingDraft {
   const base = prior ?? emptyDraft();
   const fromLlm: BookingDraft = {
-    serviceName: thin.bookingSlots.serviceName ?? base.serviceName,
-    serviceDisplayName: thin.bookingSlots.serviceDisplayName ?? base.serviceDisplayName,
-    date: thin.bookingSlots.date ?? base.date,
-    time: thin.bookingSlots.time ?? base.time,
-    customerName: thin.bookingSlots.customerName ?? base.customerName,
-    phone: thin.bookingSlots.phone ?? base.phone,
+    serviceName: orNull(thin.bookingSlots.serviceName) ?? base.serviceName,
+    serviceDisplayName: orNull(thin.bookingSlots.serviceDisplayName) ?? base.serviceDisplayName,
+    date: orNull(thin.bookingSlots.date) ?? base.date,
+    time: orNull(thin.bookingSlots.time) ?? base.time,
+    customerName: orNull(thin.bookingSlots.customerName) ?? base.customerName,
+    phone: orNull(thin.bookingSlots.phone) ?? base.phone,
   };
   const fromCode = extractSlots(currentMessage);
   let merged = mergeSlots(fromLlm, fromCode);

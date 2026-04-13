@@ -70,7 +70,8 @@ export default function PublicChatPage() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-      const res = await fetch(`${API_BASE}/api/chat/public`, {
+        console.log('API_BASE =', API_BASE);
+        const res = await fetch(`${API_BASE}/api/chat/public`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

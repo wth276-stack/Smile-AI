@@ -1,17 +1,24 @@
 import type { BookingDraft, KnowledgeChunk } from '../types';
 
+/** Normalize empty / whitespace LLM output so ?? fallback keeps prior slots (json_object often sends ""). */
+function orNull(v: unknown): string | null {
+  if (typeof v === 'string' && v.trim()) return v.trim();
+  return null;
+}
+
 function mergeDraft(
   existing: BookingDraft | undefined | null,
   llmDraft: Partial<BookingDraft> | undefined | null,
 ): BookingDraft {
   return {
-    bookingId: llmDraft?.bookingId ?? existing?.bookingId ?? null,
-    serviceName: llmDraft?.serviceName ?? existing?.serviceName ?? null,
-    serviceDisplayName: llmDraft?.serviceDisplayName ?? existing?.serviceDisplayName ?? null,
-    date: llmDraft?.date ?? existing?.date ?? null,
-    time: llmDraft?.time ?? existing?.time ?? null,
-    customerName: llmDraft?.customerName ?? existing?.customerName ?? null,
-    phone: llmDraft?.phone ?? existing?.phone ?? null,
+    bookingId: orNull(llmDraft?.bookingId) ?? orNull(existing?.bookingId) ?? null,
+    serviceName: orNull(llmDraft?.serviceName) ?? orNull(existing?.serviceName) ?? null,
+    serviceDisplayName:
+      orNull(llmDraft?.serviceDisplayName) ?? orNull(existing?.serviceDisplayName) ?? null,
+    date: orNull(llmDraft?.date) ?? orNull(existing?.date) ?? null,
+    time: orNull(llmDraft?.time) ?? orNull(existing?.time) ?? null,
+    customerName: orNull(llmDraft?.customerName) ?? orNull(existing?.customerName) ?? null,
+    phone: orNull(llmDraft?.phone) ?? orNull(existing?.phone) ?? null,
   };
 }
 
@@ -220,7 +227,7 @@ export function validateOutput(
     cd?.time &&
     cd?.customerName &&
     cd?.phone &&
-    /好|ok|確認|confirm|係|冇問題|無問題|submit/i.test(currentMessage)
+    /好|ok|確認|confirm|係|冇問題|無問題|submit|啱|正確|得|可以|搞掂/i.test(currentMessage)
   ) {
     action = 'SUBMIT_BOOKING';
     issues.push('Override: REPLY → SUBMIT_BOOKING (all slots filled + user confirmed)');

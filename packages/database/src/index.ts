@@ -17,8 +17,10 @@ export {
   loadConversationHistory,
   saveMessages,
   getBookingDraft,
+  getConversationBookingState,
   updateBookingDraft,
   resetConversation,
+  closeConversation,
 } from './conversation-helpers';
 export { getActiveServicesAsChunks, getKnowledgeChunksFromDB } from './service-helpers';
 export {

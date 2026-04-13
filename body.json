@@ -1,6 +1,6 @@
-{
-    "tenantId":  "cmnmzdqhy0000qp0c035jxvpz",
+﻿{
+    "tenantId":  "demo-tenant",
     "channel":  "WEBCHAT",
-    "message":  "我想預約激光去斑，15號3點，我叫陳小明",
-    "externalContactId":  "neg2e-20260412155030"
+    "message":  "hi",
+    "externalContactId":  "post-deploy-test"
 }

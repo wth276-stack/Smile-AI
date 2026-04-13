@@ -207,6 +207,7 @@ export class ChatService {
       tenantId,
       contact.id,
       result.sideEffects,
+      result.signals?.bookingDraft,
     );
 
     await this.conversations.addMessage(

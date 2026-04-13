@@ -17,7 +17,7 @@ import {
   findOrCreateWebchatConversation,
   loadConversationHistory,
   saveMessages,
-  getBookingDraft,
+  getConversationBookingState,
   updateBookingDraft,
   resetConversation,
   closeConversation,
@@ -118,7 +118,9 @@ app.post('/api/chat', async (req, res) => {
     const conversation = await findOrCreateWebchatConversation(sid, TENANT_ID);
     const convId = conversation.id;
 
-    const bookingDraft = (await getBookingDraft(convId)) as BookingDraft | null;
+    const { bookingDraft: draftRow, confirmationPending: priorConfirmationPending } =
+      await getConversationBookingState(convId);
+    const bookingDraft = draftRow as BookingDraft | null;
     // Look up existing bookings if we have a phone number
     const draftPhone = bookingDraft?.phone ?? null;
     const existingBookings = draftPhone
@@ -167,6 +169,7 @@ app.post('/api/chat', async (req, res) => {
       knowledge: knowledgeChunks,
       bookingDraft: bookingDraft ?? undefined,
       existingBookings,
+      signals: { confirmationPending: priorConfirmationPending },
     };
 
     const result = await runAiEngineV2(input);
@@ -180,12 +183,14 @@ app.post('/api/chat', async (req, res) => {
       console.error('[api-server] Failed to save messages:', err);
     }
 
-    if (result.signals.bookingDraft) {
-      try {
-        await updateBookingDraft(convId, result.signals.bookingDraft as unknown as Record<string, unknown>);
-      } catch (err) {
-        console.error('[api-server] Failed to update booking draft:', err);
-      }
+    try {
+      await updateBookingDraft(
+        convId,
+        result.signals.bookingDraft as unknown as Record<string, unknown> | undefined,
+        !!result.signals.confirmationPending,
+      );
+    } catch (err) {
+      console.error('[api-server] Failed to update conversation metadata:', err);
     }
 
     if ((result as any)._v2Action === 'SUBMIT_BOOKING' && result.signals.bookingDraft) {
@@ -193,6 +198,11 @@ app.post('/api/chat', async (req, res) => {
       try {
         const booking = await submitV2Booking(slots, TENANT_ID);
         console.log('[api] Booking saved:', booking.id);
+        try {
+          await updateBookingDraft(convId, undefined, false);
+        } catch (e) {
+          console.error('[api-server] Failed to reset confirmationPending after submit:', e);
+        }
         await closeConversation(convId);
       } catch (err) {
         console.error('[api] Failed to save booking to DB:', err);
@@ -208,6 +218,11 @@ app.post('/api/chat', async (req, res) => {
             time: draft.time ?? undefined,
           });
           console.log('[api] Booking modified:', updated.id, updated.startTime);
+          try {
+            await updateBookingDraft(convId, undefined, false);
+          } catch (e) {
+            console.error('[api-server] Failed to reset confirmationPending after modify:', e);
+          }
         } catch (err) {
           console.error('[api] Failed to modify booking:', err);
         }
@@ -220,6 +235,11 @@ app.post('/api/chat', async (req, res) => {
         try {
           const cancelled = await cancelBooking(draft.bookingId, TENANT_ID);
           console.log('[api] Booking cancelled:', cancelled.id);
+          try {
+            await updateBookingDraft(convId, undefined, false);
+          } catch (e) {
+            console.error('[api-server] Failed to reset confirmationPending after cancel:', e);
+          }
         } catch (err) {
           console.error('[api] Failed to cancel booking:', err);
         }
