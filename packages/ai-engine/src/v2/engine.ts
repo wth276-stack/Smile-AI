@@ -745,7 +745,10 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     }
 
     {
-      const boundary = applyConfirmationBoundaryPostProcess(finalMergedDraft, finalReply, finalAction);
+      const boundary = applyConfirmationBoundaryPostProcess(finalMergedDraft, finalReply, finalAction, {
+        currentMessage: input.currentMessage,
+        confirmationPending: !!input.signals?.confirmationPending,
+      });
       finalReply = boundary.reply;
       finalAction = boundary.action;
       if (boundary.usedTemplate) {

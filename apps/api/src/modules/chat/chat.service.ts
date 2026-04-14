@@ -6,11 +6,12 @@ import { ContactsService } from '../contacts/contacts.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import { KnowledgeRetrieverService } from './knowledge-retriever.service';
 import { ChatPersistenceService } from './chat-persistence.service';
-import { runAiEngine } from '@ats/ai-engine';
+import { bookingDraftHasAllRequiredSlots, runAiEngine } from '@ats/ai-engine';
 import type { AiEngineInput, AiEngineResult, BookingDraft } from '@ats/ai-engine';
 import { getConversationBookingState, updateBookingDraft, mergeConversationMetadata } from '@ats/database';
 import type { ChatMessageDto } from './dto/chat-message.dto';
 import type { PublicChatDto } from './dto/public-chat.dto';
+import { shouldEscapeStaleConfirmation } from './stale-confirmation-escape';
 
 const FALLBACK_REPLY = '收到你嘅訊息，我哋同事會盡快回覆你，感謝耐心等候！';
 
@@ -118,7 +119,6 @@ export class ChatService {
 
     const conversationState = await this.persistence.loadConversationState(conversation.id);
     const metaState = await getConversationBookingState(conversation.id);
-    const bookingDraftMeta = metaState.bookingDraft as BookingDraft | null | undefined;
     const {
       bookingDraft: bookingDraftFromRun,
       conversationMode,
@@ -131,20 +131,31 @@ export class ChatService {
       customerStyle,
     } = conversationState;
 
-    let bookingDraft = (bookingDraftMeta ?? bookingDraftFromRun) as BookingDraft | undefined;
-    const confirmationPending = metaState.confirmationPending || confirmationFromRun;
+    let bookingDraft: BookingDraft | undefined;
+    if (metaState.bookingDraftExplicit === undefined) {
+      bookingDraft = bookingDraftFromRun as BookingDraft | undefined;
+    } else if (metaState.bookingDraftExplicit === null) {
+      bookingDraft = undefined;
+    } else {
+      bookingDraft = metaState.bookingDraftExplicit as unknown as BookingDraft;
+    }
+
+    let confirmationPending =
+      metaState.confirmationPendingExplicit !== null
+        ? metaState.confirmationPendingExplicit
+        : confirmationFromRun;
 
     // --- Session cutoff: detect stale completed booking + new booking intent ---
-    const allSlotsFilled = bookingDraft?.serviceName && bookingDraft?.date
-      && bookingDraft?.time && bookingDraft?.customerName && bookingDraft?.phone;
+    const allSlotsFilled = bookingDraft && bookingDraftHasAllRequiredSlots(bookingDraft);
     const isNewBookingIntent = /想預約|想book|預約|想做|book|我要預約/.test(message);
     if (allSlotsFilled && isNewBookingIntent) {
       this.logger.log(`Session cutoff: clearing stale draft + writing contextResetAt for conv=${conversation.id}`);
-      await updateBookingDraft(conversation.id, undefined, false);
+      await updateBookingDraft(conversation.id, null, false);
       await mergeConversationMetadata(conversation.id, {
         contextResetAt: new Date().toISOString(),
       });
       bookingDraft = undefined;
+      confirmationPending = false;
       recentMessages = [];
     } else {
       // Apply contextResetAt cutoff from a previous reset (for subsequent turns)
@@ -160,6 +171,21 @@ export class ChatService {
           (m) => m.createdAt.getTime() >= cutoffTime,
         );
       }
+    }
+
+    // --- Stale confirmation escape: FAQ / price / info while waiting for booking confirm ---
+    if (
+      confirmationPending &&
+      bookingDraft &&
+      bookingDraftHasAllRequiredSlots(bookingDraft) &&
+      shouldEscapeStaleConfirmation(message)
+    ) {
+      this.logger.log(
+        `[chat.service] Stale confirmation escaped — user sent FAQ/info query during pending confirmation conv=${conversation.id}`,
+      );
+      await updateBookingDraft(conversation.id, null, false);
+      bookingDraft = undefined;
+      confirmationPending = false;
     }
 
     const knowledge = await this.knowledgeRetriever.retrieveForMessage(

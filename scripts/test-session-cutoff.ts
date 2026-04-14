@@ -11,6 +11,11 @@
  *
  * NOTE: Date assertions assume run date = EXPECTED_RUN_DATE below.
  * Relative-date tests (聽日, 大後日, 星期X) will give wrong expected values on other days.
+ *
+ * Manual Check D (stale-confirmation escape — do not wipe modify flow):
+ * While bot shows booking confirmation summary, send: 「唔正確，我想改時間」
+ * Expected: draft kept; bot enters modify flow (asks what to change).
+ * NOT expected: draft cleared as if new chat.
  */
 
 const API_BASE = process.env.API_BASE || 'http://localhost:3001';

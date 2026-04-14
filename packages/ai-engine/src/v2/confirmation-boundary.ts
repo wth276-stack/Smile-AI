@@ -1,5 +1,6 @@
 import type { BookingDraft } from '../types';
 import { bookingDraftHasAllRequiredSlots, formatDateDisplay, formatTimeDisplay } from '../booking-state';
+import { isBookingConfirmationRejectionMessage } from './booking-confirmation-rejection';
 
 function normalizeCompact(s: string): string {
   return s.replace(/\s+/g, '').replace(/[：:，,。．·]/g, '');
@@ -95,6 +96,13 @@ export interface ConfirmationBoundaryResult {
   usedTemplate: boolean;
 }
 
+export interface ConfirmationBoundaryOptions {
+  /** Current user message (for rejection / modify intent). */
+  currentMessage?: string;
+  /** True when the previous turn ended in CONFIRM_BOOKING / awaiting confirmation. */
+  confirmationPending?: boolean;
+}
+
 /**
  * Post-process after LLM + slot merge: server-owned confirmation state when all slots are filled.
  * Cases: (1) complete + CONFIRM → keep (2) complete + wrong action → keep text, set CONFIRM (3) incomplete → template + CONFIRM.
@@ -103,9 +111,25 @@ export function applyConfirmationBoundaryPostProcess(
   mergedDraft: BookingDraft,
   reply: string,
   action: string,
+  opts?: ConfirmationBoundaryOptions,
 ): ConfirmationBoundaryResult {
   if (!bookingDraftHasAllRequiredSlots(mergedDraft)) {
     return { reply, action, usedTemplate: false };
+  }
+
+  if (
+    opts?.confirmationPending &&
+    opts.currentMessage &&
+    isBookingConfirmationRejectionMessage(opts.currentMessage)
+  ) {
+    let a = action;
+    if (a === 'CONFIRM_BOOKING' || a === 'REPLY' || a === 'REPLY_ONLY') {
+      a = 'COLLECT_BOOKING';
+    }
+    if (a === 'SUBMIT_BOOKING') {
+      a = 'COLLECT_BOOKING';
+    }
+    return { reply, action: a, usedTemplate: false };
   }
 
   if (

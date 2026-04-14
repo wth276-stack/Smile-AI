@@ -84,18 +84,42 @@ export async function saveMessages(
 export async function getConversationBookingState(conversationId: string): Promise<{
   bookingDraft: Record<string, unknown> | null;
   confirmationPending: boolean;
+  /**
+   * null = metadata has no `confirmationPending` key — ChatService should fall back to AiRun.
+   * boolean = explicit value in metadata (must override AiRun).
+   */
+  confirmationPendingExplicit: boolean | null;
+  /**
+   * undefined = metadata has no `bookingDraft` key — fall back to AiRun draft.
+   * null = explicitly cleared in metadata.
+   */
+  bookingDraftExplicit: Record<string, unknown> | null | undefined;
 }> {
   const conv = await prisma.conversation.findUnique({
     where: { id: conversationId },
     select: { metadata: true },
   });
   if (!conv?.metadata) {
-    return { bookingDraft: null, confirmationPending: false };
+    return {
+      bookingDraft: null,
+      confirmationPending: false,
+      confirmationPendingExplicit: null,
+      bookingDraftExplicit: undefined,
+    };
   }
   const meta = conv.metadata as Record<string, unknown>;
+  const hasPendingKey = 'confirmationPending' in meta;
+  const hasDraftKey = 'bookingDraft' in meta;
+  const bookingDraftLegacy = (meta.bookingDraft as Record<string, unknown>) ?? null;
   return {
-    bookingDraft: (meta.bookingDraft as Record<string, unknown>) ?? null,
+    bookingDraft: bookingDraftLegacy,
     confirmationPending: !!meta.confirmationPending,
+    confirmationPendingExplicit: hasPendingKey ? !!meta.confirmationPending : null,
+    bookingDraftExplicit: hasDraftKey
+      ? meta.bookingDraft === null
+        ? null
+        : (meta.bookingDraft as Record<string, unknown>)
+      : undefined,
   };
 }
 
@@ -108,7 +132,7 @@ export async function getBookingDraft(
 
 export async function updateBookingDraft(
   conversationId: string,
-  draft: Prisma.InputJsonValue | undefined,
+  draft: Prisma.InputJsonValue | undefined | null,
   confirmationPending: boolean | undefined,
 ) {
   const conv = await prisma.conversation.findUnique({
@@ -120,8 +144,8 @@ export async function updateBookingDraft(
 
   const metaToSave = {
     ...existingMeta,
-    ...(draft !== undefined && { bookingDraft: draft }),
-    confirmationPending: !!confirmationPending,
+    ...(draft !== undefined ? { bookingDraft: draft } : {}),
+    ...(confirmationPending !== undefined ? { confirmationPending: !!confirmationPending } : {}),
   } as any;
 
   await prisma.conversation.update({

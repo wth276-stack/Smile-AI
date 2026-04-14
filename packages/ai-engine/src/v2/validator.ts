@@ -1,5 +1,6 @@
 import type { BookingDraft, KnowledgeChunk } from '../types';
 import { bookingDraftHasAllRequiredSlots } from '../booking-state';
+import { isBookingConfirmationRejectionMessage } from './booking-confirmation-rejection';
 import { getHKTToday } from './date-utils';
 
 /** Normalize empty / whitespace LLM output so ?? fallback keeps prior slots (json_object often sends ""). */
@@ -72,6 +73,8 @@ function isConfirmationMessage(text: string): boolean {
 
   return false;
 }
+
+export { isBookingConfirmationRejectionMessage } from './booking-confirmation-rejection';
 
 /**
  * Fallback: check if the last assistant turn looks like a booking confirmation summary.
@@ -181,6 +184,18 @@ export function validateOutput(
   }
 
   let action = raw.action ?? 'REPLY_ONLY';
+
+  if (
+    ctx.confirmationPending &&
+    ctx.currentMessage &&
+    isBookingConfirmationRejectionMessage(ctx.currentMessage) &&
+    (action === 'CONFIRM_BOOKING' || action === 'REPLY' || action === 'REPLY_ONLY')
+  ) {
+    action = 'COLLECT_BOOKING';
+    issues.push(
+      'User rejected or wants to modify booking confirmation — COLLECT_BOOKING (not CONFIRM_BOOKING)',
+    );
+  }
 
   // ── Date/time swap detection (Bug 1 fix) ──
   if (ctx.currentMessage) {

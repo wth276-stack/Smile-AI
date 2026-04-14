@@ -231,7 +231,7 @@ export class ChatPersistenceService {
     );
     if (!hasBookingMutation) return;
     try {
-      await updateBookingDraft(conversationId, undefined, false);
+      await updateBookingDraft(conversationId, null, false);
     } catch (err) {
       this.logger.warn(
         `Failed to reset confirmationPending after booking side effect: ${errMsg(err)}`,

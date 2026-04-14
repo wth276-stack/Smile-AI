@@ -19,21 +19,12 @@ export default function PublicChatPage() {
   const tenantSlug = typeof params?.tenantSlug === 'string' ? params.tenantSlug : '';
 
   const [messages, setMessages] = useState<Message[]>([]);
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  /** undefined until first reply in this page session — do not restore from localStorage on load (fresh conversation per refresh). */
+  const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!tenantSlug || typeof window === 'undefined') return;
-    try {
-      const stored = localStorage.getItem(conversationStorageKey(tenantSlug));
-      if (stored?.trim()) setConversationId(stored.trim());
-    } catch {
-      /* ignore */
-    }
-  }, [tenantSlug]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -64,7 +55,7 @@ export default function PublicChatPage() {
       tenantSlug,
       message: text,
     };
-    if (conversationId) body.conversationId = conversationId;
+    if (conversationId?.trim()) body.conversationId = conversationId.trim();
 
     try {
       const controller = new AbortController();
@@ -121,6 +112,18 @@ export default function PublicChatPage() {
     }
   }, [tenantSlug, input, loading, conversationId]);
 
+  const startNewChat = useCallback(() => {
+    try {
+      if (tenantSlug) localStorage.removeItem(conversationStorageKey(tenantSlug));
+    } catch {
+      /* ignore */
+    }
+    setConversationId(undefined);
+    setMessages([]);
+    setError(null);
+    setInput('');
+  }, [tenantSlug]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -139,9 +142,19 @@ export default function PublicChatPage() {
   return (
     <div className="min-h-[100dvh] h-[100dvh] bg-gray-50 flex flex-col overflow-hidden">
       <header className="shrink-0 bg-white border-b px-4 py-3 shadow-sm pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div className="max-w-lg mx-auto">
-          <h1 className="text-base font-semibold text-gray-900">線上諮詢</h1>
-          <p className="text-xs text-gray-500">我哋會盡快回覆你</p>
+        <div className="max-w-lg mx-auto flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-base font-semibold text-gray-900">線上諮詢</h1>
+            <p className="text-xs text-gray-500">我哋會盡快回覆你</p>
+          </div>
+          <button
+            type="button"
+            onClick={startNewChat}
+            className="shrink-0 text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded-lg px-2.5 py-1.5 bg-blue-50/80"
+            aria-label="開始新對話"
+          >
+            新對話
+          </button>
         </div>
       </header>
 

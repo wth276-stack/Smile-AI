@@ -26,6 +26,9 @@
 | 知識庫 | http://localhost:3001/dashboard/knowledge-base |
 | 設定 | http://localhost:3001/dashboard/settings |
 | Demo Chat | http://localhost:3001/demo/chat |
+| Public Chat（tenant slug，例如 demo） | http://localhost:3000/chat/demo-tenant |
+
+> Port 視乎點起 Next：`next dev` 預設多數係 **3000**；若用本文件「啟動前端」指令 `--port 3001`，則把上面 URL 嘅 port 改做 **3001**。
 
 ---
 

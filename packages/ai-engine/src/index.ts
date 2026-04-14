@@ -27,6 +27,7 @@ export {
   mergeSlots,
   getMissingSlots,
   isBookingComplete,
+  bookingDraftHasAllRequiredSlots,
   isValidHkPhone,
   verifyBookingDateTimeRegression,
 } from './booking-state';
