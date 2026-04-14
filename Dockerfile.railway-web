@@ -10,9 +10,9 @@ RUN pnpm install --frozen-lockfile
 
 FROM base AS builder
 WORKDIR /app
+# Skip a second pnpm install here: it re-resolves the whole repo and triggers bcrypt/node-gyp on Alpine.
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @ats/shared build
 RUN pnpm --filter @ats/web build
 
