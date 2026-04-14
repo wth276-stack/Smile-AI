@@ -132,6 +132,25 @@ export async function updateBookingDraft(
   });
 }
 
+/**
+ * Merge partial fields into conversation.metadata without overwriting unrelated keys.
+ * Safe for concurrent callers writing different metadata keys.
+ */
+export async function mergeConversationMetadata(
+  conversationId: string,
+  patch: Record<string, unknown>,
+) {
+  const conv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { metadata: true },
+  });
+  const existing = (conv?.metadata as Record<string, any>) ?? {};
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { metadata: { ...existing, ...patch } },
+  });
+}
+
 export async function resetConversation(conversationId: string) {
   await prisma.message.deleteMany({ where: { conversationId } });
   await prisma.conversation.update({

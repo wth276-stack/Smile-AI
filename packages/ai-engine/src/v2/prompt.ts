@@ -1,4 +1,5 @@
 import type { PromptContext, BookingDraft, KnowledgeChunk } from './types';
+import { getHKTToday } from './date-utils';
 
 export function formatKnowledgeChunks(
   chunks: KnowledgeChunk[],
@@ -130,9 +131,14 @@ export function buildSystemPrompt(ctx: PromptContext): string {
         return `${i + 1}. [ID: ${b.id}] ${b.serviceName} — ${dateStr} ${timeStr} (${b.status})`;
       }).join('\n')}`
     : '';
-  const greeting = ctx.contactName ? `The customer's name is ${ctx.contactName}. Use it naturally when appropriate.` : '';
-  const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  const draftName = ctx.currentDraft?.customerName;
+  const greeting = draftName
+    ? `The customer's name for this booking is ${draftName}. Use it naturally when appropriate.`
+    : ctx.contactName
+      ? `Contact name on file: ${ctx.contactName} (may be from a previous booking — confirm with the customer if starting a new booking).`
+      : '';
+  const now = getHKTToday();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const dayOfWeek = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
 
   const personaExtras = [

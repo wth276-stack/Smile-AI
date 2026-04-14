@@ -50,7 +50,8 @@ export function resetDraftAfterBooking(): BookingDraftState {
 }
 
 export function extractSlots(msg: string): SlotExtraction {
-  return extractSlotsWithReferenceDate(msg, new Date());
+  const hktNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Hong_Kong' }));
+  return extractSlotsWithReferenceDate(msg, hktNow);
 }
 
 /** Use fixed `ref` for tests; production should use `extractSlots(msg)`. */
@@ -77,6 +78,29 @@ export function mergeSlots(draft: BookingDraft, extraction: SlotExtraction): Boo
 export function getMissingSlots(draft: BookingDraft): (keyof BookingDraft)[] {
   const required: (keyof BookingDraft)[] = ['serviceName', 'date', 'time', 'customerName', 'phone'];
   return required.filter((k) => !draft[k]);
+}
+
+/** True when all booking slots needed for confirmation are present (service = code or display). */
+export function bookingDraftHasAllRequiredSlots(draft: BookingDraft): boolean {
+  const hasService = !!(draft.serviceName?.trim() || draft.serviceDisplayName?.trim());
+  return (
+    hasService &&
+    !!draft.date &&
+    !!draft.time &&
+    !!draft.customerName?.trim() &&
+    !!draft.phone?.trim()
+  );
+}
+
+/** Which required slots are still missing (service satisfied by code or display name). */
+export function getMissingBookingSlots(draft: BookingDraft): string[] {
+  const missing: string[] = [];
+  if (!draft.serviceName?.trim() && !draft.serviceDisplayName?.trim()) missing.push('serviceName');
+  if (!draft.date) missing.push('date');
+  if (!draft.time) missing.push('time');
+  if (!draft.customerName?.trim()) missing.push('customerName');
+  if (!draft.phone?.trim()) missing.push('phone');
+  return missing;
 }
 
 export function isBookingComplete(draft: BookingDraft): boolean {
@@ -122,6 +146,10 @@ function extractDate(msg: string, ref: Date): string | null {
   } else if (/明天|明日|聽日|tomorrow/i.test(msg)) {
     const d = new Date(ref);
     d.setDate(d.getDate() + 1);
+    out = formatDate(startOfDay(d));
+  } else if (/大後日|大后日/.test(msg)) {
+    const d = new Date(ref);
+    d.setDate(d.getDate() + 3);
     out = formatDate(startOfDay(d));
   } else if (/後天|后天/i.test(msg)) {
     const d = new Date(ref);
@@ -329,7 +357,7 @@ export function formatTimeDisplay(time: string): string {
   return `${period}${dh}:${String(m).padStart(2, '0')}`;
 }
 
-export function formatDateDisplay(date: string, ref: Date = new Date()): string {
+export function formatDateDisplay(date: string, ref: Date = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Hong_Kong' }))): string {
   const today = formatDate(startOfDay(ref));
   const tmr = new Date(ref);
   tmr.setDate(tmr.getDate() + 1);

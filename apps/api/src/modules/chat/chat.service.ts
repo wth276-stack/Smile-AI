@@ -8,7 +8,7 @@ import { KnowledgeRetrieverService } from './knowledge-retriever.service';
 import { ChatPersistenceService } from './chat-persistence.service';
 import { runAiEngine } from '@ats/ai-engine';
 import type { AiEngineInput, AiEngineResult, BookingDraft } from '@ats/ai-engine';
-import { getConversationBookingState, updateBookingDraft } from '@ats/database';
+import { getConversationBookingState, updateBookingDraft, mergeConversationMetadata } from '@ats/database';
 import type { ChatMessageDto } from './dto/chat-message.dto';
 import type { PublicChatDto } from './dto/public-chat.dto';
 
@@ -113,10 +113,9 @@ export class ChatService {
 
     await this.conversations.addMessage(conversation.id, 'CUSTOMER', message);
 
-    const recentMessages = await this.conversations.getRecentMessages(conversation.id, 20);
+    let recentMessages = await this.conversations.getRecentMessages(conversation.id, 20);
     const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
 
-    // Load full conversation state (AiRun) + V2 booking mirror in conversation.metadata (api-server parity)
     const conversationState = await this.persistence.loadConversationState(conversation.id);
     const metaState = await getConversationBookingState(conversation.id);
     const bookingDraftMeta = metaState.bookingDraft as BookingDraft | null | undefined;
@@ -124,7 +123,6 @@ export class ChatService {
       bookingDraft: bookingDraftFromRun,
       conversationMode,
       confirmationPending: confirmationFromRun,
-      // Decision Engine v1: load customer signals
       conversationStage,
       customerEmotion,
       customerResistance,
@@ -133,8 +131,36 @@ export class ChatService {
       customerStyle,
     } = conversationState;
 
-    const bookingDraft = bookingDraftMeta ?? bookingDraftFromRun;
+    let bookingDraft = (bookingDraftMeta ?? bookingDraftFromRun) as BookingDraft | undefined;
     const confirmationPending = metaState.confirmationPending || confirmationFromRun;
+
+    // --- Session cutoff: detect stale completed booking + new booking intent ---
+    const allSlotsFilled = bookingDraft?.serviceName && bookingDraft?.date
+      && bookingDraft?.time && bookingDraft?.customerName && bookingDraft?.phone;
+    const isNewBookingIntent = /想預約|想book|預約|想做|book|我要預約/.test(message);
+    if (allSlotsFilled && isNewBookingIntent) {
+      this.logger.log(`Session cutoff: clearing stale draft + writing contextResetAt for conv=${conversation.id}`);
+      await updateBookingDraft(conversation.id, undefined, false);
+      await mergeConversationMetadata(conversation.id, {
+        contextResetAt: new Date().toISOString(),
+      });
+      bookingDraft = undefined;
+      recentMessages = [];
+    } else {
+      // Apply contextResetAt cutoff from a previous reset (for subsequent turns)
+      const convRecord = await this.prisma.conversation.findUnique({
+        where: { id: conversation.id },
+        select: { metadata: true },
+      });
+      const meta = convRecord?.metadata as Record<string, unknown> | null;
+      const cutoff = meta?.contextResetAt as string | undefined;
+      if (cutoff) {
+        const cutoffTime = new Date(cutoff).getTime();
+        recentMessages = recentMessages.filter(
+          (m) => m.createdAt.getTime() >= cutoffTime,
+        );
+      }
+    }
 
     const knowledge = await this.knowledgeRetriever.retrieveForMessage(
       tenantId,

@@ -19,6 +19,7 @@ export {
   getBookingDraft,
   getConversationBookingState,
   updateBookingDraft,
+  mergeConversationMetadata,
   resetConversation,
   closeConversation,
 } from './conversation-helpers';

@@ -1,4 +1,6 @@
 import type { BookingDraft, KnowledgeChunk } from '../types';
+import { bookingDraftHasAllRequiredSlots } from '../booking-state';
+import { getHKTToday } from './date-utils';
 
 /** Normalize empty / whitespace LLM output so ?? fallback keeps prior slots (json_object often sends ""). */
 function orNull(v: unknown): string | null {
@@ -6,7 +8,7 @@ function orNull(v: unknown): string | null {
   return null;
 }
 
-function mergeDraft(
+export function mergeBookingDraft(
   existing: BookingDraft | undefined | null,
   llmDraft: Partial<BookingDraft> | undefined | null,
 ): BookingDraft {
@@ -37,16 +39,6 @@ interface LlmRawOutput {
   newSlots?: Partial<BookingDraft>;
   action?: string;
   bookingDraft?: Partial<BookingDraft>;
-}
-
-function isDraftComplete(draft: BookingDraft): boolean {
-  return (
-    !!draft.serviceName &&
-    !!draft.date &&
-    !!draft.time &&
-    !!draft.customerName &&
-    !!draft.phone
-  );
 }
 
 /**
@@ -98,7 +90,7 @@ function lastAssistantLooksLikeBookingConfirmation(ctx: ValidateContext): boolea
       const reply = parsed.reply ?? parsed.replyText ?? '';
       if (
         reply &&
-        /(請確認|確認.*預約|以下係|預約詳情|預約資料|是否.*確認|預約.*如下|麻煩.*確認|幫你確認|核對|幫你整理|以上.*確認|啱唔啱)/.test(
+        /(請確認|確認.*預約|以下係|預約詳情|預約資料|是否.*確認|預約.*如下|麻煩.*確認|幫你確認|幫您確認|核對|幫你整理|以上.*確認|啱唔啱)/.test(
           reply,
         )
       ) {
@@ -169,16 +161,33 @@ export function validateOutput(
 ) {
   const issues: string[] = [];
   let reply = raw.replyText ?? '抱歉，我唔太明白你嘅意思，可以再講多少少嗎？';
-  let action = raw.action ?? 'REPLY_ONLY';
   const intent = raw.intents?.[0] ?? 'OTHER';
   let newSlots = raw.newSlots ?? raw.bookingDraft ?? {};
+
+  // After CONFIRM_BOOKING, 好/確認 must become SUBMIT — never merge them as customerName="好" etc.
+  if (
+    ctx.confirmationPending &&
+    ctx.currentMessage &&
+    isConfirmationMessage(ctx.currentMessage) &&
+    ctx.currentDraft &&
+    bookingDraftHasAllRequiredSlots(ctx.currentDraft)
+  ) {
+    newSlots = {};
+    raw.action = 'SUBMIT_BOOKING';
+    issues.push('Affirmation after confirmation summary: cleared LLM slot merges (SUBMIT_BOOKING)');
+    console.warn(
+      '[v2/validator] Forced SUBMIT_BOOKING: confirmationPending + full draft + affirmation — ignoring slot rewrites',
+    );
+  }
+
+  let action = raw.action ?? 'REPLY_ONLY';
 
   // ── Date/time swap detection (Bug 1 fix) ──
   if (ctx.currentMessage) {
     newSlots = detectAndCorrectDateTimeSwap(ctx.currentMessage, newSlots, issues);
   }
 
-  const mergedDraft = mergeDraft(ctx.currentDraft, newSlots);
+  const mergedDraft = mergeBookingDraft(ctx.currentDraft, newSlots);
   const normalise = (s: string) => s.toLowerCase().replace(/\s+/g, '');
   const kbTitles = ctx.knowledgeChunks.map((c) => c.title);
   const isFuzzyServiceMatch = (candidate: string) => {
@@ -203,7 +212,7 @@ export function validateOutput(
 
   if (newSlots.date) {
     const parsed = new Date(newSlots.date + 'T00:00:00');
-    const today = new Date();
+    const today = getHKTToday();
     today.setHours(0, 0, 0, 0);
     if (isNaN(parsed.getTime()) || parsed < today) {
       issues.push('Invalid or past date');
@@ -222,11 +231,8 @@ export function validateOutput(
   const cd = ctx.currentDraft;
   if (
     action === 'REPLY' &&
-    cd?.serviceName &&
-    cd?.date &&
-    cd?.time &&
-    cd?.customerName &&
-    cd?.phone &&
+    cd &&
+    bookingDraftHasAllRequiredSlots(cd) &&
     /好|ok|確認|confirm|係呀|係啊|係嘅|冇問題|無問題|submit|啱|正確|得|可以|搞掂/i.test(currentMessage)
   ) {
     action = 'SUBMIT_BOOKING';
@@ -240,13 +246,18 @@ export function validateOutput(
   const confirmationDetected =
     ctx.confirmationPending || lastAssistantLooksLikeBookingConfirmation(ctx);
 
+  // Include COLLECT_BOOKING / CONFIRM_BOOKING: model may re-confirm or re-collect instead of submit
+  // after 好 (e.g. multi-booking stress); REPLY-only override would miss that.
   if (
     action !== 'SUBMIT_BOOKING' &&
-    isDraftComplete(mergedDraft) &&
+    bookingDraftHasAllRequiredSlots(mergedDraft) &&
     confirmationDetected &&
     ctx.currentMessage &&
     isConfirmationMessage(ctx.currentMessage) &&
-    (raw.action === 'REPLY' || raw.action === 'REPLY_ONLY')
+    (raw.action === 'REPLY' ||
+      raw.action === 'REPLY_ONLY' ||
+      raw.action === 'COLLECT_BOOKING' ||
+      raw.action === 'CONFIRM_BOOKING')
   ) {
     console.warn(
       '[v2/validator] Overriding action to SUBMIT_BOOKING: draft complete + confirmation detected' +

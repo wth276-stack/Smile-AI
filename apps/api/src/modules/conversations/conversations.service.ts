@@ -100,11 +100,12 @@ export class ConversationsService {
   }
 
   async getRecentMessages(conversationId: string, limit: number) {
-    return this.prisma.message.findMany({
+    const rows = await this.prisma.message.findMany({
       where: { conversationId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       take: limit,
     });
+    return rows.reverse();
   }
 
   /**

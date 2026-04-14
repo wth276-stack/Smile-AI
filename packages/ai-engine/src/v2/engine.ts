@@ -10,15 +10,21 @@ import type {
   TenantProfile,
   SideEffect,
   SideEffectBookingChanges,
+  ServiceEntry,
 } from './types';
 import { buildMessages } from './prompt';
-import { validateOutput } from './validator';
-import { buildBookingDateTime } from '../booking-state';
+import { mergeBookingDraft, validateOutput } from './validator';
+import { applyConfirmationBoundaryPostProcess } from './confirmation-boundary';
+import { buildBookingDateTime, extractSlots, getMissingBookingSlots } from '../booking-state';
+import { matchService } from '../service-matcher';
 
 const FALLBACK_REPLY = '抱歉，系統暫時遇到問題，請稍後再試 🙏';
 
 const MAX_HISTORY = 10;
 const API_TIMEOUT_MS = 60_000;
+
+export { getHKTToday } from './date-utils';
+import { getHKTToday } from './date-utils';
 
 const EMPTY_DRAFT: BookingDraft = {
   bookingId: null,
@@ -32,7 +38,7 @@ const EMPTY_DRAFT: BookingDraft = {
 
 function buildCalendarRef(today?: Date): string {
   const dayLabels = ['日', '一', '二', '三', '四', '五', '六'];
-  const d = today ?? new Date();
+  const d = today ?? getHKTToday();
 
   function addDays(base: Date, n: number): Date {
     const r = new Date(base);
@@ -209,14 +215,15 @@ function buildSideEffects(
   const effects: SideEffect[] = [];
 
   if (finalAction === 'SUBMIT_BOOKING') {
-    if (draft.serviceName && draft.date && draft.time) {
+    const hasService = !!(draft.serviceName?.trim() || draft.serviceDisplayName?.trim());
+    if (hasService && draft.date && draft.time) {
       let startTime: string;
       try {
         startTime = buildBookingDateTime(draft.date, draft.time).toISOString();
       } catch {
         startTime = `${draft.date}T${draft.time}:00`;
       }
-      const serviceName = (draft.serviceDisplayName ?? draft.serviceName).trim();
+      const serviceName = (draft.serviceDisplayName ?? draft.serviceName ?? '').trim();
       effects.push({
         type: 'CREATE_BOOKING',
         data: {
@@ -227,6 +234,7 @@ function buildSideEffects(
     } else {
       console.warn('[v2/engine] SUBMIT_BOOKING but draft incomplete — no side effect', {
         serviceName: draft.serviceName,
+        serviceDisplayName: draft.serviceDisplayName,
         date: draft.date,
         time: draft.time,
       });
@@ -294,6 +302,76 @@ function inferMissingService(
   }
 
   return newSlots;
+}
+
+/**
+ * Fallback: when LLM returns REPLY with no newSlots, deterministically extract
+ * service / date / time from the user message so slots don't silently disappear.
+ */
+function deterministicSlotFallback(
+  userMessage: string,
+  newSlots: Partial<BookingDraft>,
+  mergedDraft: BookingDraft,
+  knowledge: unknown[],
+): Partial<BookingDraft> {
+  const hasNewSlot = newSlots.serviceName || newSlots.date || newSlots.time
+    || newSlots.customerName || newSlots.phone;
+  if (hasNewSlot) return newSlots;
+
+  const patched = { ...newSlots };
+  let changed = false;
+
+  if (!mergedDraft.serviceName) {
+    const catalog: ServiceEntry[] = [];
+    for (const chunk of knowledge) {
+      const c = chunk as Record<string, unknown>;
+      const title = typeof c.title === 'string' ? c.title.trim() : '';
+      if (title) {
+        catalog.push({
+          code: title,
+          displayName: title,
+          aliases: [title],
+          priceInfo: null,
+          fullInfo: '',
+        });
+      }
+    }
+    if (catalog.length > 0) {
+      const result = matchService(userMessage, catalog);
+      if ((result.type === 'exact' || result.type === 'close') && result.matches.length > 0) {
+        const best = result.matches[0];
+        patched.serviceName = best.service.code;
+        patched.serviceDisplayName = best.service.displayName;
+        changed = true;
+        console.log(`[v2/engine] Fallback: extracted service "${best.service.displayName}" from user message`);
+      }
+    }
+  }
+
+  const extracted = extractSlots(userMessage);
+  if (!mergedDraft.date && extracted.date) {
+    patched.date = extracted.date;
+    changed = true;
+    console.log(`[v2/engine] Fallback: extracted date "${extracted.date}" from user message`);
+  }
+  if (!mergedDraft.time && extracted.time) {
+    patched.time = extracted.time;
+    changed = true;
+    console.log(`[v2/engine] Fallback: extracted time "${extracted.time}" from user message`);
+  }
+  if (!mergedDraft.customerName && extracted.customerName) {
+    patched.customerName = extracted.customerName;
+    changed = true;
+  }
+  if (!mergedDraft.phone && extracted.phone) {
+    patched.phone = extracted.phone;
+    changed = true;
+  }
+
+  if (changed) {
+    console.log('[v2/engine] Fallback slots applied:', JSON.stringify(patched));
+  }
+  return patched;
 }
 
 /* ── 從截斷嘅 JSON 用 regex 提取資料 ── */
@@ -367,7 +445,7 @@ function getHongKongDayOfWeekIndex(d: Date): number {
 }
 
 export function resolveRelativeDates(text: string, today?: Date): string | null {
-  const d = today ?? new Date();
+  const d = today ?? getHKTToday();
   const dayLabels = ['日', '一', '二', '三', '四', '五', '六'];
   const dow = d.getDay();
 
@@ -394,7 +472,9 @@ export function resolveRelativeDates(text: string, today?: Date): string | null 
   if (/聽日|明天|明日/.test(text)) {
     results.push(fmtResult('聽日', addDays(d, 1)));
   }
-  if (/後日|後天/.test(text)) {
+  if (/大後日|大后日/.test(text)) {
+    results.push(fmtResult('大後日', addDays(d, 3)));
+  } else if (/後日|後天/.test(text)) {
     results.push(fmtResult('後日', addDays(d, 2)));
   }
 
@@ -591,24 +671,29 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     }
 
     /* Bug 2 fix：自動補漏 serviceName */
-    const finalNewSlots = inferMissingService(
+    let finalNewSlots = inferMissingService(
       validated.newSlots,
       validated.mergedDraft,
       normalized.replyText,
       input.knowledge,
     );
 
-    /* 如果有補上 service，更新 mergedDraft */
-    const finalMergedDraft = { ...validated.mergedDraft };
-    if (finalNewSlots.serviceName && !finalMergedDraft.serviceName) {
-      finalMergedDraft.serviceName = finalNewSlots.serviceName;
-    }
-    if (finalNewSlots.serviceDisplayName && !finalMergedDraft.serviceDisplayName) {
-      finalMergedDraft.serviceDisplayName = finalNewSlots.serviceDisplayName;
+    // Fallback: if LLM returned REPLY/REPLY_ONLY with no newSlots, extract deterministically
+    if (
+      (validated.action === 'REPLY' || validated.action === 'REPLY_ONLY') &&
+      !finalNewSlots.serviceName && !finalNewSlots.date && !finalNewSlots.time
+    ) {
+      finalNewSlots = deterministicSlotFallback(
+        input.currentMessage,
+        finalNewSlots,
+        validated.mergedDraft,
+        input.knowledge,
+      );
     }
 
-    const requiredSlots = ['serviceName', 'date', 'time', 'customerName', 'phone'] as const;
-    const missingSlots = requiredSlots.filter((k) => !finalMergedDraft[k]);
+    const finalMergedDraft = mergeBookingDraft(validated.mergedDraft, finalNewSlots);
+
+    const missingSlots = getMissingBookingSlots(finalMergedDraft);
 
     let finalAction = validated.action as string;
 
@@ -669,6 +754,15 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
         finalReply += ` 請提供你嘅${missingLabels}。`;
         finalAction = 'COLLECT_BOOKING';
         console.log('[v2/engine] Guard: stripped premature confirmation, missing:', missingLabels);
+      }
+    }
+
+    {
+      const boundary = applyConfirmationBoundaryPostProcess(finalMergedDraft, finalReply, finalAction);
+      finalReply = boundary.reply;
+      finalAction = boundary.action;
+      if (boundary.usedTemplate) {
+        console.warn('[v2/engine] Confirmation boundary (Case 3): deterministic summary + CONFIRM_BOOKING');
       }
     }
 
