@@ -1,4 +1,10 @@
 import type { BookingDraft } from './types';
+import {
+  addCalendarDaysHKT,
+  formatDateHKYmd,
+  getHKTJsWeekday,
+  getHKTToday,
+} from './v2/date-utils';
 
 // ── Slot extraction result (from a single message) ──
 
@@ -50,8 +56,7 @@ export function resetDraftAfterBooking(): BookingDraftState {
 }
 
 export function extractSlots(msg: string): SlotExtraction {
-  const hktNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Hong_Kong' }));
-  return extractSlotsWithReferenceDate(msg, hktNow);
+  return extractSlotsWithReferenceDate(msg, getHKTToday());
 }
 
 /** Use fixed `ref` for tests; production should use `extractSlots(msg)`. */
@@ -109,28 +114,21 @@ export function isBookingComplete(draft: BookingDraft): boolean {
 
 // ── Date helpers ─────────────────────────────────────────────────────────────
 
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function parseYmd(ymd: string): Date {
-  const [y, m, day] = ymd.split('-').map(Number);
-  return startOfDay(new Date(y, m - 1, day));
-}
-
 function resolveZhMonthDay(month: number, day: number, ref: Date): string {
-  let y = ref.getFullYear();
-  let candidate = startOfDay(new Date(y, month - 1, day));
-  const refDay = startOfDay(ref);
-  if (candidate < refDay) {
+  const refYmd = formatDateHKYmd(ref);
+  const refYear = parseInt(refYmd.slice(0, 4), 10);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  let y = refYear;
+  let candidate = `${y}-${pad(month)}-${pad(day)}`;
+  if (candidate < refYmd) {
     y += 1;
-    candidate = startOfDay(new Date(y, month - 1, day));
+    candidate = `${y}-${pad(month)}-${pad(day)}`;
   }
-  return formatDate(candidate);
+  return candidate;
 }
 
 function ensureDateNotBeforeRef(ymd: string, ref: Date): string | null {
-  if (parseYmd(ymd) < startOfDay(ref)) return null;
+  if (ymd < formatDateHKYmd(ref)) return null;
   return ymd;
 }
 
@@ -139,22 +137,17 @@ function ensureDateNotBeforeRef(ymd: string, ref: Date): string | null {
 function extractDate(msg: string, ref: Date): string | null {
   let out: string | null = null;
 
+  const refYmd = formatDateHKYmd(ref);
   // Match today/tomorrow/day after keywords
   // Added "今日" (Cantonese) alongside "今天" (Mandarin)
   if (/今天|今日|today|今晚/i.test(msg)) {
-    out = formatDate(startOfDay(ref));
+    out = refYmd;
   } else if (/明天|明日|聽日|tomorrow/i.test(msg)) {
-    const d = new Date(ref);
-    d.setDate(d.getDate() + 1);
-    out = formatDate(startOfDay(d));
+    out = addCalendarDaysHKT(refYmd, 1);
   } else if (/大後日|大后日/.test(msg)) {
-    const d = new Date(ref);
-    d.setDate(d.getDate() + 3);
-    out = formatDate(startOfDay(d));
+    out = addCalendarDaysHKT(refYmd, 3);
   } else if (/後天|后天/i.test(msg)) {
-    const d = new Date(ref);
-    d.setDate(d.getDate() + 2);
-    out = formatDate(startOfDay(d));
+    out = addCalendarDaysHKT(refYmd, 2);
   } else {
     const weekdayDate = parseWeekdayReference(msg, ref);
     if (weekdayDate) {
@@ -201,8 +194,8 @@ function parseWeekdayReference(msg: string, ref: Date): string | null {
 }
 
 function getNextWeekday(targetDay: number, forceNextWeek: boolean, ref: Date): string {
-  const now = new Date(ref);
-  const currentDay = now.getDay();
+  const refYmd = formatDateHKYmd(ref);
+  const currentDay = getHKTJsWeekday(ref);
   let daysAhead: number;
 
   if (forceNextWeek) {
@@ -215,9 +208,7 @@ function getNextWeekday(targetDay: number, forceNextWeek: boolean, ref: Date): s
     if (daysAhead === 0) daysAhead = 7;
   }
 
-  const result = new Date(now);
-  result.setDate(result.getDate() + daysAhead);
-  return formatDate(startOfDay(result));
+  return addCalendarDaysHKT(refYmd, daysAhead);
 }
 
 // ── Time extraction ───────────────────────────────────────────────────────────
@@ -346,10 +337,6 @@ export function isValidHkPhone(phone: string | null): boolean {
 
 // ── Display helpers ───────────────────────────────────────────────────────────
 
-function formatDate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 export function formatTimeDisplay(time: string): string {
   const [h, m] = time.split(':').map(Number);
   const period = h < 12 ? '上午' : '下午';
@@ -357,23 +344,19 @@ export function formatTimeDisplay(time: string): string {
   return `${period}${dh}:${String(m).padStart(2, '0')}`;
 }
 
-export function formatDateDisplay(date: string, ref: Date = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Hong_Kong' }))): string {
-  const today = formatDate(startOfDay(ref));
-  const tmr = new Date(ref);
-  tmr.setDate(tmr.getDate() + 1);
-  const tomorrowStr = formatDate(startOfDay(tmr));
-  const dayAfter = new Date(ref);
-  dayAfter.setDate(dayAfter.getDate() + 2);
-  const dayAfterStr = formatDate(startOfDay(dayAfter));
+export function formatDateDisplay(date: string, ref: Date = getHKTToday()): string {
+  const today = formatDateHKYmd(ref);
+  const tomorrowStr = addCalendarDaysHKT(today, 1);
+  const dayAfterStr = addCalendarDaysHKT(today, 2);
 
   if (date === today) return '今天';
   if (date === tomorrowStr) return '明天';
   if (date === dayAfterStr) return '後天';
 
   const [, month, day] = date.split('-').map(Number);
-  const dateObj = new Date(parseInt(date.split('-')[0], 10), month - 1, day);
+  const noon = new Date(`${date}T12:00:00+08:00`);
   const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
-  const weekday = weekdays[dateObj.getDay()];
+  const weekday = weekdays[getHKTJsWeekday(noon)];
   return `${month}月${day}日（星期${weekday}）`;
 }
 

@@ -23,8 +23,14 @@ const FALLBACK_REPLY = '抱歉，系統暫時遇到問題，請稍後再試 🙏
 const MAX_HISTORY = 10;
 const API_TIMEOUT_MS = 60_000;
 
-export { getHKTToday } from './date-utils';
-import { getHKTToday } from './date-utils';
+import {
+  addCalendarDaysHKT,
+  formatDateHKYmd,
+  getHKTJsWeekday,
+  getHKTToday,
+} from './date-utils';
+
+export { getHKTToday, formatDateHKYmd };
 
 const EMPTY_DRAFT: BookingDraft = {
   bookingId: null,
@@ -38,32 +44,32 @@ const EMPTY_DRAFT: BookingDraft = {
 
 function buildCalendarRef(today?: Date): string {
   const dayLabels = ['日', '一', '二', '三', '四', '五', '六'];
-  const d = today ?? getHKTToday();
+  const baseYmd = formatDateHKYmd(today ?? getHKTToday());
 
-  function addDays(base: Date, n: number): Date {
-    const r = new Date(base);
-    r.setDate(base.getDate() + n);
-    return r;
+  function fmtFromYmd(ymd: string): string {
+    const [, m, day] = ymd.split('-').map(Number);
+    const noon = new Date(`${ymd}T12:00:00+08:00`);
+    const dow = getHKTJsWeekday(noon);
+    return `${m}月${day}日（星期${dayLabels[dow]}）`;
   }
-  function fmt(date: Date): string {
-    return `${date.getMonth() + 1}月${date.getDate()}日（星期${dayLabels[date.getDay()]}）`;
-  }
-  function fmtShort(date: Date): string {
-    return `${date.getMonth() + 1}月${date.getDate()}日`;
+  function fmtShortFromYmd(ymd: string): string {
+    const [, m, day] = ymd.split('-').map(Number);
+    return `${m}月${day}日`;
   }
 
   const lines: string[] = [];
-  lines.push(`今日 = ${fmt(d)}`);
-  lines.push(`聽日 = ${fmt(addDays(d, 1))}`);
+  lines.push(`今日 = ${fmtFromYmd(baseYmd)}`);
+  lines.push(`聽日 = ${fmtFromYmd(addCalendarDaysHKT(baseYmd, 1))}`);
 
   const seen = new Set<number>();
   for (let i = 2; i <= 9; i++) {
-    const target = addDays(d, i);
-    const dow = target.getDay();
+    const ymd = addCalendarDaysHKT(baseYmd, i);
+    const noon = new Date(`${ymd}T12:00:00+08:00`);
+    const dow = getHKTJsWeekday(noon);
     if (seen.has(dow)) continue;
     seen.add(dow);
     const prefix = i <= 7 ? '星期' : '下星期';
-    lines.push(`${prefix}${dayLabels[dow]} = ${fmtShort(target)}`);
+    lines.push(`${prefix}${dayLabels[dow]} = ${fmtShortFromYmd(ymd)}`);
   }
 
   return lines.join('\n');
@@ -416,38 +422,19 @@ function extractFromTruncatedJson(raw: string): LLMOutput | null {
   };
 }
 
-/** Calendar YYYY-MM-DD in Asia/Hong_Kong (not UTC ISO — avoids off-by-one vs local weekday). */
+/** @deprecated Use formatDateHKYmd from date-utils — kept for external scripts/tests. */
 export function formatHongKongYmd(d: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Hong_Kong',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d);
+  return formatDateHKYmd(d);
 }
 
 function getHongKongDayOfWeekIndex(d: Date): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Hong_Kong',
-    weekday: 'short',
-  }).formatToParts(d);
-  const w = parts.find((p) => p.type === 'weekday')?.value;
-  const map: Record<string, number> = {
-    Sun: 0,
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-  };
-  return w !== undefined && w in map ? map[w] : d.getDay();
+  return getHKTJsWeekday(d);
 }
 
 export function resolveRelativeDates(text: string, today?: Date): string | null {
   const d = today ?? getHKTToday();
   const dayLabels = ['日', '一', '二', '三', '四', '五', '六'];
-  const dow = d.getDay();
+  const dow = getHongKongDayOfWeekIndex(d);
 
   function addDays(base: Date, n: number): Date {
     const r = new Date(base);
