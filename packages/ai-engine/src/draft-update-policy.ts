@@ -19,11 +19,16 @@ export interface DraftPatchResult {
   appliedFields: (keyof BookingDraft)[];
 }
 
+/** Slot fields filled from extracted strings — not `mode` / `bookingId`. */
+type DraftSlotField = 'date' | 'time' | 'customerName' | 'phone';
+
 const EXPLICIT_CORRECTION_PATTERN =
   /改(做|為|去|返)?|更正|唔係|不是|not\s+this|wrong|改期|改時間|改電話|改名|轉做|轉返|想改/i;
 
 function emptyDraft(): BookingDraft {
   return {
+    bookingId: null,
+    mode: null,
     serviceName: null,
     serviceDisplayName: null,
     date: null,
@@ -34,7 +39,7 @@ function emptyDraft(): BookingDraft {
 }
 
 function canOverwriteField(
-  field: keyof BookingDraft,
+  field: DraftSlotField,
   prior: BookingDraft,
   nextValue: string | null,
   options: DraftPatchOptions,
@@ -54,7 +59,7 @@ export function applyDraftPatch(
   const draft = { ...prior };
   const appliedFields: (keyof BookingDraft)[] = [];
 
-  const applyField = (field: keyof BookingDraft, value: string | null) => {
+  const applyField = (field: DraftSlotField, value: string | null) => {
     if (!value) return;
     if (!canOverwriteField(field, prior, value, options)) return;
     if (draft[field] === value) return;
