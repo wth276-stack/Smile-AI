@@ -14,7 +14,7 @@ import type {
   AuditPreBoundarySnapshot,
 } from './types';
 import { buildMessages } from './prompt';
-import { mergeBookingDraft, validateOutput } from './validator';
+import { mergeBookingDraft, validateOutput, isConfirmationMessage } from './validator';
 import { applyConfirmationBoundaryPostProcess } from './confirmation-boundary';
 import {
   bookingDraftHasAllRequiredSlots,
@@ -68,14 +68,16 @@ function buildCalendarRef(today?: Date): string {
   lines.push(`今日 = ${fmtFromYmd(baseYmd)}`);
   lines.push(`聽日 = ${fmtFromYmd(addCalendarDaysHKT(baseYmd, 1))}`);
 
-  const seen = new Set<number>();
-  for (let i = 2; i <= 9; i++) {
+  const count = new Map<number, number>();
+  for (let i = 2; count.size < 7 || ![...count.values()].every((v) => v >= 2); i++) {
+    if (i > 21) break;
     const ymd = addCalendarDaysHKT(baseYmd, i);
     const noon = new Date(`${ymd}T12:00:00+08:00`);
     const dow = getHKTJsWeekday(noon);
-    if (seen.has(dow)) continue;
-    seen.add(dow);
-    const prefix = i <= 7 ? '星期' : '下星期';
+    const c = count.get(dow) ?? 0;
+    if (c >= 2) continue;
+    count.set(dow, c + 1);
+    const prefix = c === 0 ? '星期' : '下星期';
     lines.push(`${prefix}${dayLabels[dow]} = ${fmtShortFromYmd(ymd)}`);
   }
 
@@ -736,6 +738,19 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     if (finalAction === 'SUBMIT_BOOKING' && missingSlots.length > 0) {
       console.log('[v2/engine] SUBMIT_BOOKING but missing:', missingSlots);
       finalAction = 'COLLECT_BOOKING';
+    }
+    // Cancel: require an explicit cancel-confirmation turn (confirmationPending) before CANCEL_BOOKING side effect.
+    if (
+      finalAction === 'CANCEL_BOOKING' &&
+      finalMergedDraft.mode === 'cancel' &&
+      !input.signals?.confirmationPending &&
+      input.currentMessage &&
+      !isConfirmationMessage(input.currentMessage)
+    ) {
+      finalAction = 'CONFIRM_BOOKING';
+      console.warn(
+        '[v2/engine] Deferred CANCEL_BOOKING: awaiting cancel confirmation (no prior confirmationPending)',
+      );
     }
     // Pass through MODIFY_BOOKING and CANCEL_BOOKING as-is
     if (finalAction === 'MODIFY_BOOKING' || finalAction === 'CANCEL_BOOKING') {

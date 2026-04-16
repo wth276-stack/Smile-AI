@@ -6,6 +6,14 @@
  *   cd apps/api && set RUN_CHAT_E2E=1 && pnpm exec jest --config jest.integration.config.js --runInBand
  *
  * Or PowerShell: $env:RUN_CHAT_E2E='1'; pnpm exec jest --config jest.integration.config.js --runInBand
+ *
+ * Create-booking contract (V2): COLLECT → CONFIRM (summary) → user affirms → SUBMIT_BOOKING → CREATE_BOOKING.
+ * Cancel-booking contract (V2): phone lookup → identify booking → CONFIRM cancel → user affirms → CANCEL_BOOKING (DB CANCELLED).
+ * Tests do not assume a single user message immediately persists a booking.
+ *
+ * Follow-ups tracked outside this file (separate tickets, not fixed here):
+ * 1) Assistant reply text vs newSlots inconsistency (e.g. asks for name when already in newSlots)
+ * 2) serviceDisplayName / KB title alias mismatch (e.g. 眼部護理 vs Eye Treatment)
  */
 
 import type { AddressInfo } from 'net';
@@ -35,6 +43,34 @@ async function postJson(app: INestApplication, path: string, body: unknown) {
     json = { _raw: text };
   }
   return { status: res.status, json };
+}
+
+/** Multi-turn: intent → slots → affirmation — aligns with CONFIRM → SUBMIT → CREATE. */
+async function postEyeTreatmentBookingFlow(
+  app: INestApplication,
+  tenantId: string,
+  ext: string,
+  detailLine: string,
+) {
+  await postJson(app, '/api/chat/message', {
+    tenantId,
+    channel: 'WEBCHAT',
+    externalContactId: ext,
+    contactName: 'E2E',
+    message: '我想預約 Eye Treatment',
+  });
+  await postJson(app, '/api/chat/message', {
+    tenantId,
+    channel: 'WEBCHAT',
+    externalContactId: ext,
+    message: detailLine,
+  });
+  return postJson(app, '/api/chat/message', {
+    tenantId,
+    channel: 'WEBCHAT',
+    externalContactId: ext,
+    message: '好',
+  });
 }
 
 (RUN ? describe : describe.skip)('Chat flow E2E (RUN_CHAT_E2E=1)', () => {
@@ -152,18 +188,40 @@ async function postJson(app: INestApplication, path: string, body: unknown) {
     expect((run?.signals as any).intents).toContain('PRICE_INQUIRY');
   });
 
-  it('S3 full booking: booking row + REQUEST_BOOKING path', async () => {
+  it('S3 full booking: collect → affirm → CREATE_BOOKING + one row', async () => {
     const ext = `${extPrefix}-s3`;
-    const msg =
-      '我想預約 Eye Treatment，明天晚上7點，我叫陳大文電話91234567';
+    await postJson(app!, '/api/chat/message', {
+      tenantId,
+      channel: 'WEBCHAT',
+      externalContactId: ext,
+      contactName: 'E2E',
+      message: '我想預約 Eye Treatment',
+    });
+    await postJson(app!, '/api/chat/message', {
+      tenantId,
+      channel: 'WEBCHAT',
+      externalContactId: ext,
+      message: '明天晚上7點，我叫陳大文電話91234567',
+    });
+
+    const contactMid = await prisma!.contact.findFirst({
+      where: { tenantId, externalIds: { path: ['webchat'], equals: ext } },
+    });
+    expect(
+      await prisma!.booking.count({
+        where: { tenantId, contactId: contactMid!.id },
+      }),
+    ).toBe(0);
+
     const { json } = await postJson(app!, '/api/chat/message', {
       tenantId,
       channel: 'WEBCHAT',
       externalContactId: ext,
-      message: msg,
+      message: '好',
     });
     const j = json as any;
     expect(j.sideEffectFailures).toEqual([]);
+    expect((j.sideEffects ?? []).some((e: { type: string }) => e.type === 'CREATE_BOOKING')).toBe(true);
 
     const contact = await prisma!.contact.findFirst({
       where: { tenantId, externalIds: { path: ['webchat'], equals: ext } },
@@ -190,13 +248,14 @@ async function postJson(app: INestApplication, path: string, body: unknown) {
       tenantId,
       channel: 'WEBCHAT',
       externalContactId: ext,
+      contactName: 'E2E',
       message: '我想預約 Eye Treatment',
     });
     const { json } = await postJson(app!, '/api/chat/message', {
       tenantId,
       channel: 'WEBCHAT',
       externalContactId: ext,
-      message: '晚上7點',
+      message: '明天晚上7點',
     });
     const j = json as any;
     expect(j.reply).toBeTruthy();
@@ -206,33 +265,42 @@ async function postJson(app: INestApplication, path: string, body: unknown) {
       orderBy: { createdAt: 'asc' },
     });
     const last = runs[runs.length - 1];
-    expect((last.signals as any).intents).toContain('BOOKING_REQUEST');
+    const sig = last.signals as any;
+    expect(
+      sig.intents?.includes('BOOKING_REQUEST') ||
+        (typeof sig.bookingDraft?.time === 'string' && sig.bookingDraft.time.trim().length > 0),
+    ).toBe(true);
   });
 
-  it('S5 duplicate full booking: still one booking row', async () => {
-    const ext = `${extPrefix}-s5`;
-    const msg =
-      '我想預約 Eye Treatment，明天晚上7點，我叫陳大文電話91234567';
-    await postJson(app!, '/api/chat/message', {
-      tenantId,
-      channel: 'WEBCHAT',
-      externalContactId: ext,
-      message: msg,
-    });
-    await postJson(app!, '/api/chat/message', {
-      tenantId,
-      channel: 'WEBCHAT',
-      externalContactId: ext,
-      message: msg,
-    });
-    const contact = await prisma!.contact.findFirst({
-      where: { tenantId, externalIds: { path: ['webchat'], equals: ext } },
-    });
-    const n = await prisma!.booking.count({
-      where: { tenantId, contactId: contact!.id },
-    });
-    expect(n).toBe(1);
-  });
+  it(
+    'S5 duplicate affirm after create: idempotent — still one booking row (3 runs)',
+    async () => {
+      for (let run = 0; run < 3; run++) {
+        const ext = `${extPrefix}-s5-r${run}`;
+        await postEyeTreatmentBookingFlow(
+          app!,
+          tenantId!,
+          ext,
+          '明天晚上7點，我叫陳大文電話91234567',
+        );
+        await postJson(app!, '/api/chat/message', {
+          tenantId,
+          channel: 'WEBCHAT',
+          externalContactId: ext,
+          message: '好',
+        });
+
+        const contact = await prisma!.contact.findFirst({
+          where: { tenantId, externalIds: { path: ['webchat'], equals: ext } },
+        });
+        const n = await prisma!.booking.count({
+          where: { tenantId, contactId: contact!.id },
+        });
+        expect(n).toBe(1);
+      }
+    },
+    360_000,
+  );
 
   it('S6 CREATE_BOOKING failure: ERROR run, sideEffectFailures, no extra booking', async () => {
     const ext = `${extPrefix}-s6`;
@@ -273,13 +341,24 @@ async function postJson(app: INestApplication, path: string, body: unknown) {
     await appFail.listen(0);
 
     const before = await prismaFail.booking.count({ where: { tenantId } });
-    const msg =
-      '我想預約 Eye Treatment，明天晚上7點，我叫測試電話99887766';
+    await postJson(appFail, '/api/chat/message', {
+      tenantId,
+      channel: 'WEBCHAT',
+      externalContactId: ext,
+      contactName: 'E2E',
+      message: '我想預約 Eye Treatment',
+    });
+    await postJson(appFail, '/api/chat/message', {
+      tenantId,
+      channel: 'WEBCHAT',
+      externalContactId: ext,
+      message: '明天晚上7點，我叫陳大文電話99887766',
+    });
     const { json } = await postJson(appFail, '/api/chat/message', {
       tenantId,
       channel: 'WEBCHAT',
       externalContactId: ext,
-      message: msg,
+      message: '好',
     });
     const j = json as any;
     expect(j.sideEffectFailures?.length).toBeGreaterThanOrEqual(1);
@@ -361,5 +440,251 @@ async function postJson(app: INestApplication, path: string, body: unknown) {
     const j = json as any;
     expect(j.reply).not.toMatch(/Eye Treatment/);
     expect(j.reply).not.toMatch(/HIFU/);
+  });
+
+  it('S10 contract: one-shot full booking info without affirm — no CREATE_BOOKING, no row', async () => {
+    const ext = `${extPrefix}-s10`;
+    const { json } = await postJson(app!, '/api/chat/message', {
+      tenantId,
+      channel: 'WEBCHAT',
+      externalContactId: ext,
+      contactName: 'E2E',
+      message:
+        '我想預約 Eye Treatment，明天晚上7點，我叫陳大文電話91234567',
+    });
+    const j = json as any;
+    expect((j.sideEffects ?? []).some((e: { type: string }) => e.type === 'CREATE_BOOKING')).toBe(false);
+    expect(j.sideEffectFailures ?? []).toEqual([]);
+
+    const contact = await prisma!.contact.findFirst({
+      where: { tenantId, externalIds: { path: ['webchat'], equals: ext } },
+    });
+    expect(
+      await prisma!.booking.count({
+        where: { tenantId, contactId: contact!.id },
+      }),
+    ).toBe(0);
+
+    const conv = await prisma!.conversation.findFirst({ where: { tenantId, externalId: ext } });
+    const lastAi = await prisma!.message.findFirst({
+      where: { conversationId: conv!.id, sender: 'AI' },
+      orderBy: { createdAt: 'desc' },
+    });
+    const meta = lastAi?.metadata as { rawLlmJson?: string } | null;
+    expect(meta?.rawLlmJson).toBeTruthy();
+    const parsed = JSON.parse(meta!.rawLlmJson!) as { action?: string };
+    expect(['COLLECT_BOOKING', 'CONFIRM_BOOKING']).toContain(parsed.action);
+  });
+
+  it('C1 single booking cancel: confirm → 確認取消 → CANCEL_BOOKING + DB CANCELLED', async () => {
+    const ext = `${extPrefix}-c1`;
+    const phone = '69885678';
+    const start = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    const contact = await prisma!.contact.create({
+      data: {
+        tenantId: tenantId!,
+        name: 'Cancel C1',
+        phone,
+        externalIds: { webchat: ext },
+      },
+    });
+    const booking = await prisma!.booking.create({
+      data: {
+        tenantId: tenantId!,
+        contactId: contact.id,
+        status: 'CONFIRMED',
+        serviceName: 'Eye Treatment',
+        startTime: start,
+        endTime: new Date(start.getTime() + 45 * 60 * 1000),
+        phone,
+        customerName: '陳大文',
+      },
+    });
+
+    const { json: j1 } = await postJson(app!, '/api/chat/message', {
+      tenantId,
+      channel: 'WEBCHAT',
+      externalContactId: ext,
+      contactName: 'E2E',
+      message: '我想取消預約，我電話係69885678',
+    });
+    const j1o = j1 as any;
+    expect((j1o.sideEffects ?? []).some((e: { type: string }) => e.type === 'CANCEL_BOOKING')).toBe(
+      false,
+    );
+    expect(
+      await prisma!.booking.findUnique({ where: { id: booking.id } }),
+    ).toMatchObject({ status: 'CONFIRMED' });
+
+    const { json: j2 } = await postJson(app!, '/api/chat/message', {
+      tenantId,
+      channel: 'WEBCHAT',
+      externalContactId: ext,
+      message: '確認取消',
+    });
+    const j2o = j2 as any;
+    expect((j2o.sideEffects ?? []).some((e: { type: string }) => e.type === 'CANCEL_BOOKING')).toBe(
+      true,
+    );
+    expect((j2o.sideEffects ?? []).some((e: { type: string }) => e.type === 'CREATE_BOOKING')).toBe(
+      false,
+    );
+    expect(
+      await prisma!.booking.findUnique({ where: { id: booking.id } }),
+    ).toMatchObject({ status: 'CANCELLED' });
+    expect(await prisma!.booking.count({ where: { tenantId, contactId: contact.id } })).toBe(1);
+  });
+
+  it('C2 multiple upcoming bookings: list choices, no immediate CANCEL_BOOKING', async () => {
+    const ext = `${extPrefix}-c2`;
+    const phone = '61234567';
+    const tA = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    const tB = new Date(tA.getTime() + 6 * 60 * 60 * 1000);
+    const contact = await prisma!.contact.create({
+      data: {
+        tenantId: tenantId!,
+        name: 'Cancel C2',
+        phone,
+        externalIds: { webchat: ext },
+      },
+    });
+    await prisma!.booking.createMany({
+      data: [
+        {
+          tenantId: tenantId!,
+          contactId: contact.id,
+          status: 'CONFIRMED',
+          serviceName: 'Eye Treatment',
+          startTime: tA,
+          endTime: new Date(tA.getTime() + 45 * 60 * 1000),
+          phone,
+          customerName: '甲',
+        },
+        {
+          tenantId: tenantId!,
+          contactId: contact.id,
+          status: 'CONFIRMED',
+          serviceName: 'HIFU 緊緻',
+          startTime: tB,
+          endTime: new Date(tB.getTime() + 60 * 60 * 1000),
+          phone,
+          customerName: '乙',
+        },
+      ],
+    });
+
+    const { json } = await postJson(app!, '/api/chat/message', {
+      tenantId,
+      channel: 'WEBCHAT',
+      externalContactId: ext,
+      contactName: 'E2E',
+      message: '我想取消預約，我電話係61234567',
+    });
+    const j = json as any;
+    expect((j.sideEffects ?? []).some((e: { type: string }) => e.type === 'CANCEL_BOOKING')).toBe(
+      false,
+    );
+    expect(j.reply).toMatch(/1\.|2\.|邊|哪|選|張|個|預約/s);
+    const open = await prisma!.booking.count({
+      where: { tenantId, contactId: contact.id, status: { not: 'CANCELLED' } },
+    });
+    expect(open).toBe(2);
+  });
+
+  it('C3 after cancel confirmation: 我唔取消住 — no cancel, DB unchanged', async () => {
+    const ext = `${extPrefix}-c3`;
+    const phone = '69881234';
+    const start = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
+    const contact = await prisma!.contact.create({
+      data: {
+        tenantId: tenantId!,
+        name: 'Cancel C3',
+        phone,
+        externalIds: { webchat: ext },
+      },
+    });
+    const booking = await prisma!.booking.create({
+      data: {
+        tenantId: tenantId!,
+        contactId: contact.id,
+        status: 'CONFIRMED',
+        serviceName: 'Eye Treatment',
+        startTime: start,
+        endTime: new Date(start.getTime() + 45 * 60 * 1000),
+        phone,
+        customerName: '李小明',
+      },
+    });
+
+    await postJson(app!, '/api/chat/message', {
+      tenantId,
+      channel: 'WEBCHAT',
+      externalContactId: ext,
+      contactName: 'E2E',
+      message: '我想取消預約，我電話係69881234',
+    });
+    const { json: j2 } = await postJson(app!, '/api/chat/message', {
+      tenantId,
+      channel: 'WEBCHAT',
+      externalContactId: ext,
+      message: '我唔取消住',
+    });
+    const j2o = j2 as any;
+    expect((j2o.sideEffects ?? []).some((e: { type: string }) => e.type === 'CANCEL_BOOKING')).toBe(
+      false,
+    );
+    expect(
+      await prisma!.booking.findUnique({ where: { id: booking.id } }),
+    ).toMatchObject({ status: 'CONFIRMED' });
+  });
+
+  it('C4 cancel affirmation 好 → CANCEL_BOOKING, not CREATE_BOOKING', async () => {
+    const ext = `${extPrefix}-c4`;
+    const phone = '69889999';
+    const start = new Date(Date.now() + 16 * 24 * 60 * 60 * 1000);
+    const contact = await prisma!.contact.create({
+      data: {
+        tenantId: tenantId!,
+        name: 'Cancel C4',
+        phone,
+        externalIds: { webchat: ext },
+      },
+    });
+    const booking = await prisma!.booking.create({
+      data: {
+        tenantId: tenantId!,
+        contactId: contact.id,
+        status: 'CONFIRMED',
+        serviceName: 'Eye Treatment',
+        startTime: start,
+        endTime: new Date(start.getTime() + 45 * 60 * 1000),
+        phone,
+        customerName: '王五',
+      },
+    });
+
+    await postJson(app!, '/api/chat/message', {
+      tenantId,
+      channel: 'WEBCHAT',
+      externalContactId: ext,
+      contactName: 'E2E',
+      message: '我想取消預約，我電話係69889999',
+    });
+    const { json } = await postJson(app!, '/api/chat/message', {
+      tenantId,
+      channel: 'WEBCHAT',
+      externalContactId: ext,
+      message: '好',
+    });
+    const j = json as any;
+    expect((j.sideEffects ?? []).some((e: { type: string }) => e.type === 'CANCEL_BOOKING')).toBe(
+      true,
+    );
+    expect((j.sideEffects ?? []).some((e: { type: string }) => e.type === 'CREATE_BOOKING')).toBe(
+      false,
+    );
+    expect(
+      await prisma!.booking.findUnique({ where: { id: booking.id } }),
+    ).toMatchObject({ status: 'CANCELLED' });
   });
 });

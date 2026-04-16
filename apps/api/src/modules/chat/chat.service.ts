@@ -6,7 +6,7 @@ import { ContactsService } from '../contacts/contacts.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import { KnowledgeRetrieverService } from './knowledge-retriever.service';
 import { ChatPersistenceService } from './chat-persistence.service';
-import { bookingDraftHasAllRequiredSlots, extractSlots, runAiEngine } from '@ats/ai-engine';
+import { bookingDraftHasAllRequiredSlots, emptyDraft, extractSlots, runAiEngine } from '@ats/ai-engine';
 import type { AiEngineInput, AiEngineResult, BookingDraft } from '@ats/ai-engine';
 import { getConversationBookingState, updateBookingDraft, mergeConversationMetadata } from '@ats/database';
 import type { ChatMessageDto } from './dto/chat-message.dto';
@@ -364,6 +364,15 @@ export class ChatService {
       result.sideEffects,
       result.signals?.bookingDraft,
     );
+
+    // Persist cleared draft on successful create so the next turn does not fall back to a
+    // full bookingDraft from the last AiRun (loadConversationState) and re-trigger SUBMIT_BOOKING.
+    const createSucceeded = effectExecution.succeeded.some((e) => e.type === 'CREATE_BOOKING');
+    if (createSucceeded && result.signals && typeof result.signals === 'object') {
+      const sig = result.signals as { bookingDraft?: BookingDraft; confirmationPending?: boolean };
+      sig.bookingDraft = emptyDraft();
+      sig.confirmationPending = false;
+    }
 
     const hadBookingMutation = effectExecution.succeeded.some((e) =>
       ['CREATE_BOOKING', 'MODIFY_BOOKING', 'CANCEL_BOOKING'].includes(e.type),

@@ -56,9 +56,12 @@ interface LlmRawOutput {
  * Check if the user's message is a confirmation / affirmation.
  * Handles Cantonese, Mandarin, and English variations.
  */
-function isConfirmationMessage(text: string): boolean {
+export function isConfirmationMessage(text: string): boolean {
   const t = text.trim().toLowerCase();
   if (!t) return false;
+
+  // Cancel flow: explicit consent (contains 取消 but affirms cancellation — must run before negative 取消)
+  if (/確認取消|確定取消|確認要取消|確定要取消|confirm\s*cancel/i.test(t)) return true;
 
   // Negative signals override any affirmation
   if (/但|不過|唔係|不是|改|取消|等等|唔好|算|唔要|等一等|慢|唔啱/.test(t)) return false;
@@ -221,7 +224,10 @@ export function validateOutput(
     ctx.confirmationPending &&
     ctx.currentMessage &&
     isBookingConfirmationRejectionMessage(ctx.currentMessage) &&
-    (action === 'CONFIRM_BOOKING' || action === 'REPLY' || action === 'REPLY_ONLY')
+    (action === 'CONFIRM_BOOKING' ||
+      action === 'REPLY' ||
+      action === 'REPLY_ONLY' ||
+      action === 'CANCEL_BOOKING')
   ) {
     action = 'COLLECT_BOOKING';
     issues.push(
@@ -290,11 +296,8 @@ export function validateOutput(
   }
 
   // ── SUBMIT_BOOKING override (Bug 2 fix) ──
-  // Primary signal: confirmationPending flag from previous turn's AiRun.signals
-  // Fallback: regex-based detection of booking summary in conversation history
-  const confirmationDetected =
-    ctx.confirmationPending || lastAssistantLooksLikeBookingConfirmation(ctx);
-
+  // Use only confirmationPending from the server; regex fallback on history caused duplicate
+  // CREATE_BOOKING after a successful create when the same assistant reply still "looks like" confirmation.
   // Include COLLECT_BOOKING / CONFIRM_BOOKING: model may re-confirm or re-collect instead of submit
   // after 好 (e.g. multi-booking stress); REPLY-only override would miss that.
   if (
@@ -302,7 +305,7 @@ export function validateOutput(
     mergedDraft.mode !== 'modify' &&
     mergedDraft.mode !== 'cancel' &&
     bookingDraftHasAllRequiredSlots(mergedDraft) &&
-    confirmationDetected &&
+    !!ctx.confirmationPending &&
     ctx.currentMessage &&
     isConfirmationMessage(ctx.currentMessage) &&
     (raw.action === 'REPLY' ||
@@ -311,9 +314,9 @@ export function validateOutput(
       raw.action === 'CONFIRM_BOOKING')
   ) {
     console.warn(
-      '[v2/validator] Overriding action to SUBMIT_BOOKING: draft complete + confirmation detected' +
-      ` (flag=${!!ctx.confirmationPending}, regex=${lastAssistantLooksLikeBookingConfirmation(ctx)})` +
-      ` LLM returned action=${raw.action}`,
+      '[v2/validator] Overriding action to SUBMIT_BOOKING: draft complete + confirmationPending' +
+        ` (flag=${!!ctx.confirmationPending}, regex=${lastAssistantLooksLikeBookingConfirmation(ctx)})` +
+        ` LLM returned action=${raw.action}`,
     );
     action = 'SUBMIT_BOOKING';
   }
@@ -333,6 +336,18 @@ export function validateOutput(
     console.warn(
       '[v2/validator] SUBMIT_BOOKING → MODIFY_BOOKING (modify + bookingId + affirmation + confirmation context)',
     );
+  }
+
+  // Duplicate affirm / stray SUBMIT: model may emit SUBMIT_BOOKING + full newSlots when confirmationPending
+  // is already false (e.g. after successful CREATE). Do not emit a second CREATE without a new CONFIRM turn.
+  if (
+    action === 'SUBMIT_BOOKING' &&
+    !ctx.confirmationPending &&
+    mergedDraft.mode !== 'modify' &&
+    mergedDraft.mode !== 'cancel'
+  ) {
+    action = 'REPLY_ONLY';
+    issues.push('SUBMIT_BOOKING without confirmationPending — not finalizing (duplicate-affirm guard)');
   }
 
   return {
