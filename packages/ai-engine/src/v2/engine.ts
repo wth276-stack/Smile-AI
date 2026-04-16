@@ -11,6 +11,7 @@ import type {
   SideEffect,
   SideEffectBookingChanges,
   ServiceEntry,
+  AuditPreBoundarySnapshot,
 } from './types';
 import { buildMessages } from './prompt';
 import { mergeBookingDraft, validateOutput } from './validator';
@@ -34,6 +35,7 @@ export { getHKTToday, formatDateHKYmd };
 
 const EMPTY_DRAFT: BookingDraft = {
   bookingId: null,
+  mode: null,
   serviceName: null,
   serviceDisplayName: null,
   date: null,
@@ -184,10 +186,13 @@ function buildPromptContext(input: AiEngineInput): PromptContext {
     contactName: input.contact.name ?? null,
     tenantSettings: input.tenant.settings ?? {},
     existingBookings: input.existingBookings,
+    bookingLookupEmpty: input.bookingLookupEmpty,
+    bookingLookupPhone: input.bookingLookupPhone,
     activeBookingId: input.activeBookingId ?? input.bookingDraft?.bookingId ?? null,
   };
 }
 
+/** Maps LLM `newSlots.date` / `newSlots.time` (fallback: merged draft) → `changes.startTime` ISO for persistence. */
 function buildModifyChangesFromDraft(
   merged: BookingDraft,
   newSlots: Partial<BookingDraft>,
@@ -211,6 +216,10 @@ function buildModifyChangesFromDraft(
 /**
  * V2 side effects for persistence (CREATE / MODIFY / CANCEL booking).
  * SUBMIT_BOOKING → CREATE_BOOKING is the only path that writes a new booking row.
+ *
+ * MODIFY_BOOKING / CANCEL_BOOKING:
+ * - `bookingId` = merged draft (includes LLM `newSlots.bookingId`) → then `newSlots.bookingId` → then `ctx.activeBookingId` (from input).
+ * - MODIFY `changes.startTime` = ISO string from `newSlots.date|draft.date` + `newSlots.time|draft.time` via `buildBookingDateTime` (see `buildModifyChangesFromDraft`).
  */
 function buildSideEffects(
   finalAction: string,
@@ -248,7 +257,11 @@ function buildSideEffects(
     return effects;
   }
 
-  const bookingId = draft.bookingId ?? ctx.activeBookingId ?? undefined;
+  const bookingId =
+    (draft.bookingId && String(draft.bookingId).trim()) ||
+    (newSlots.bookingId && String(newSlots.bookingId).trim()) ||
+    (ctx.activeBookingId && String(ctx.activeBookingId).trim()) ||
+    undefined;
   if (!bookingId) return effects;
 
   if (finalAction === 'CANCEL_BOOKING') {
@@ -744,6 +757,14 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
       }
     }
 
+    const preBoundaryAudit: AuditPreBoundarySnapshot = {
+      finalReplyBeforeBoundary: finalReply,
+      finalActionBeforeBoundary: finalAction,
+      mergedDraftBeforeBoundary: finalMergedDraft,
+      confirmationPendingIn: !!input.signals?.confirmationPending,
+      currentMessageIn: input.currentMessage,
+    };
+
     {
       const boundary = applyConfirmationBoundaryPostProcess(finalMergedDraft, finalReply, finalAction, {
         currentMessage: input.currentMessage,
@@ -768,6 +789,7 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
         action: finalLegacyAction,
         bookingDraft: finalMergedDraft,
         confirmationPending: finalAction === 'CONFIRM_BOOKING',
+        _auditPreBoundary: preBoundaryAudit,
       },
       sideEffects,
       shouldHandoff: finalAction === 'HANDOFF',

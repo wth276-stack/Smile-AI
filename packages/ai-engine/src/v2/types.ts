@@ -8,6 +8,7 @@ export type {
   AiAction,
   SideEffect,
   SideEffectBookingChanges,
+  AuditPreBoundarySnapshot,
 } from '../types';
 
 import type { BookingDraft, KnowledgeChunk, AiIntent, AiAction } from '../types';
@@ -57,7 +58,10 @@ export interface PromptContext {
     startTime: Date;
     endTime: Date | null;
     status: string;
+    customerName?: string | null;
   }>;
+  bookingLookupEmpty?: boolean;
+  bookingLookupPhone?: string | null;
   /** Booking id for MODIFY/CANCEL side effects (from input.activeBookingId or draft.bookingId). */
   activeBookingId?: string | null;
 }

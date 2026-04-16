@@ -4,6 +4,8 @@ import type { ChannelType } from '@ats/shared';
 
 export interface BookingDraft {
   bookingId?: string | null;
+  /** new booking vs modify / cancel flow (drives slot expectations in CRM) */
+  mode?: 'new' | 'modify' | 'cancel' | null;
   serviceName: string | null;
   serviceDisplayName: string | null;
   date: string | null;
@@ -68,7 +70,12 @@ export interface AiEngineInput {
     startTime: Date;
     endTime: Date | null;
     status: string;
+    customerName?: string | null;
   }>;
+  /** When a phone lookup was performed and returned no rows (prompt empty state). */
+  bookingLookupEmpty?: boolean;
+  /** Phone digits used for lookup messaging (optional). */
+  bookingLookupPhone?: string | null;
   /** Prior conversation state passed in from chat.service.ts */
   signals?: {
     conversationMode?: string;
@@ -140,6 +147,20 @@ export interface DetectedSignals {
   strategy?: string;
   strategyMustDo?: string[];
   strategyForbidden?: string[];
+  /**
+   * V2 only: observability — inputs immediately before `applyConfirmationBoundaryPostProcess`.
+   * Does not affect runtime behavior; used for replay/parity analysis.
+   */
+  _auditPreBoundary?: AuditPreBoundarySnapshot;
+}
+
+/** V2 engine: exact args fed into confirmation boundary (pre-template). */
+export interface AuditPreBoundarySnapshot {
+  finalReplyBeforeBoundary: string;
+  finalActionBeforeBoundary: string;
+  mergedDraftBeforeBoundary: BookingDraft;
+  confirmationPendingIn: boolean;
+  currentMessageIn: string;
 }
 
 export type AiIntent =
