@@ -16,7 +16,12 @@ import type {
 import { buildMessages } from './prompt';
 import { mergeBookingDraft, validateOutput } from './validator';
 import { applyConfirmationBoundaryPostProcess } from './confirmation-boundary';
-import { buildBookingDateTime, extractSlots, getMissingBookingSlots } from '../booking-state';
+import {
+  bookingDraftHasAllRequiredSlots,
+  buildBookingDateTime,
+  extractSlots,
+  getMissingBookingSlots,
+} from '../booking-state';
 import { matchService } from '../service-matcher';
 
 const FALLBACK_REPLY = '抱歉，系統暫時遇到問題，請稍後再試 🙏';
@@ -785,6 +790,12 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
 
     const sideEffects = buildSideEffects(finalAction, finalMergedDraft, finalNewSlots, ctx);
 
+    const modifySummaryAwaitingAffirm =
+      finalMergedDraft.mode === 'modify' &&
+      !!String(finalMergedDraft.bookingId ?? '').trim() &&
+      bookingDraftHasAllRequiredSlots(finalMergedDraft) &&
+      finalAction === 'COLLECT_BOOKING';
+
     const result: AiEngineResult & { _rawLlmJson?: string } = {
       replyText: finalReply,
       signals: {
@@ -792,7 +803,7 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
         extractedFields: buildExtractedFields(finalNewSlots),
         action: finalLegacyAction,
         bookingDraft: finalMergedDraft,
-        confirmationPending: finalAction === 'CONFIRM_BOOKING',
+        confirmationPending: finalAction === 'CONFIRM_BOOKING' || modifySummaryAwaitingAffirm,
         _auditPreBoundary: preBoundaryAudit,
       },
       sideEffects,

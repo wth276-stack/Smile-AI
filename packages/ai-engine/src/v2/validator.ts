@@ -9,6 +9,10 @@ function orNull(v: unknown): string | null {
   return null;
 }
 
+function hasModifyBookingId(d: BookingDraft | undefined | null): boolean {
+  return d?.mode === 'modify' && !!String(d?.bookingId ?? '').trim();
+}
+
 export function mergeBookingDraft(
   existing: BookingDraft | undefined | null,
   llmDraft: Partial<BookingDraft> | undefined | null,
@@ -172,6 +176,7 @@ export function validateOutput(
   let reply = raw.replyText ?? '抱歉，我唔太明白你嘅意思，可以再講多少少嗎？';
   const intent = raw.intents?.[0] ?? 'OTHER';
   let newSlots = raw.newSlots ?? raw.bookingDraft ?? {};
+  const earlyMerged = mergeBookingDraft(ctx.currentDraft, newSlots);
 
   // After CONFIRM_BOOKING, 好/確認 → SUBMIT (new booking) — modify/cancel flows must become MODIFY/CANCEL_BOOKING.
   if (
@@ -180,7 +185,7 @@ export function validateOutput(
     isConfirmationMessage(ctx.currentMessage) &&
     ctx.currentDraft
   ) {
-    if (ctx.currentDraft.mode === 'modify' && ctx.currentDraft.bookingId) {
+    if (hasModifyBookingId(ctx.currentDraft) || hasModifyBookingId(earlyMerged)) {
       newSlots = {};
       raw.action = 'MODIFY_BOOKING';
       issues.push(
@@ -196,7 +201,11 @@ export function validateOutput(
       console.warn(
         '[v2/validator] Forced CANCEL_BOOKING: confirmationPending + cancel mode + bookingId + affirmation',
       );
-    } else if (bookingDraftHasAllRequiredSlots(ctx.currentDraft)) {
+    } else if (
+      bookingDraftHasAllRequiredSlots(ctx.currentDraft) &&
+      !hasModifyBookingId(ctx.currentDraft) &&
+      !hasModifyBookingId(earlyMerged)
+    ) {
       newSlots = {};
       raw.action = 'SUBMIT_BOOKING';
       issues.push('Affirmation after confirmation summary: cleared LLM slot merges (SUBMIT_BOOKING)');
@@ -307,6 +316,23 @@ export function validateOutput(
       ` LLM returned action=${raw.action}`,
     );
     action = 'SUBMIT_BOOKING';
+  }
+
+  // Modify flow: model/prompt may output SUBMIT_BOOKING after a modify summary — must persist as MODIFY_BOOKING.
+  if (
+    ctx.currentMessage &&
+    isConfirmationMessage(ctx.currentMessage) &&
+    hasModifyBookingId(mergedDraft) &&
+    (ctx.confirmationPending || lastAssistantLooksLikeBookingConfirmation(ctx)) &&
+    action === 'SUBMIT_BOOKING'
+  ) {
+    action = 'MODIFY_BOOKING';
+    raw.action = 'MODIFY_BOOKING';
+    newSlots = {};
+    issues.push('Modify context: SUBMIT_BOOKING coerced to MODIFY_BOOKING');
+    console.warn(
+      '[v2/validator] SUBMIT_BOOKING → MODIFY_BOOKING (modify + bookingId + affirmation + confirmation context)',
+    );
   }
 
   return {
