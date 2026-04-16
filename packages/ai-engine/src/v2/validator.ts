@@ -13,8 +13,14 @@ export function mergeBookingDraft(
   existing: BookingDraft | undefined | null,
   llmDraft: Partial<BookingDraft> | undefined | null,
 ): BookingDraft {
+  function orMode(v: unknown): BookingDraft['mode'] {
+    if (v === 'modify' || v === 'cancel' || v === 'new') return v;
+    return null;
+  }
+
   return {
     bookingId: orNull(llmDraft?.bookingId) ?? orNull(existing?.bookingId) ?? null,
+    mode: orMode(llmDraft?.mode) ?? orMode(existing?.mode) ?? null,
     serviceName: orNull(llmDraft?.serviceName) ?? orNull(existing?.serviceName) ?? null,
     serviceDisplayName:
       orNull(llmDraft?.serviceDisplayName) ?? orNull(existing?.serviceDisplayName) ?? null,
@@ -167,20 +173,37 @@ export function validateOutput(
   const intent = raw.intents?.[0] ?? 'OTHER';
   let newSlots = raw.newSlots ?? raw.bookingDraft ?? {};
 
-  // After CONFIRM_BOOKING, 好/確認 must become SUBMIT — never merge them as customerName="好" etc.
+  // After CONFIRM_BOOKING, 好/確認 → SUBMIT (new booking) — modify/cancel flows must become MODIFY/CANCEL_BOOKING.
   if (
     ctx.confirmationPending &&
     ctx.currentMessage &&
     isConfirmationMessage(ctx.currentMessage) &&
-    ctx.currentDraft &&
-    bookingDraftHasAllRequiredSlots(ctx.currentDraft)
+    ctx.currentDraft
   ) {
-    newSlots = {};
-    raw.action = 'SUBMIT_BOOKING';
-    issues.push('Affirmation after confirmation summary: cleared LLM slot merges (SUBMIT_BOOKING)');
-    console.warn(
-      '[v2/validator] Forced SUBMIT_BOOKING: confirmationPending + full draft + affirmation — ignoring slot rewrites',
-    );
+    if (ctx.currentDraft.mode === 'modify' && ctx.currentDraft.bookingId) {
+      newSlots = {};
+      raw.action = 'MODIFY_BOOKING';
+      issues.push(
+        'Affirmation after modify confirmation summary: forced MODIFY_BOOKING (cleared LLM slot noise)',
+      );
+      console.warn(
+        '[v2/validator] Forced MODIFY_BOOKING: confirmationPending + modify mode + bookingId + affirmation',
+      );
+    } else if (ctx.currentDraft.mode === 'cancel' && ctx.currentDraft.bookingId) {
+      newSlots = {};
+      raw.action = 'CANCEL_BOOKING';
+      issues.push('Affirmation after cancel confirmation: forced CANCEL_BOOKING');
+      console.warn(
+        '[v2/validator] Forced CANCEL_BOOKING: confirmationPending + cancel mode + bookingId + affirmation',
+      );
+    } else if (bookingDraftHasAllRequiredSlots(ctx.currentDraft)) {
+      newSlots = {};
+      raw.action = 'SUBMIT_BOOKING';
+      issues.push('Affirmation after confirmation summary: cleared LLM slot merges (SUBMIT_BOOKING)');
+      console.warn(
+        '[v2/validator] Forced SUBMIT_BOOKING: confirmationPending + full draft + affirmation — ignoring slot rewrites',
+      );
+    }
   }
 
   let action = raw.action ?? 'REPLY_ONLY';
@@ -247,6 +270,8 @@ export function validateOutput(
   if (
     action === 'REPLY' &&
     cd &&
+    cd.mode !== 'modify' &&
+    cd.mode !== 'cancel' &&
     bookingDraftHasAllRequiredSlots(cd) &&
     /好|ok|確認|confirm|係呀|係啊|係嘅|冇問題|無問題|submit|啱|正確|得|可以|搞掂/i.test(currentMessage)
   ) {
@@ -265,6 +290,8 @@ export function validateOutput(
   // after 好 (e.g. multi-booking stress); REPLY-only override would miss that.
   if (
     action !== 'SUBMIT_BOOKING' &&
+    mergedDraft.mode !== 'modify' &&
+    mergedDraft.mode !== 'cancel' &&
     bookingDraftHasAllRequiredSlots(mergedDraft) &&
     confirmationDetected &&
     ctx.currentMessage &&

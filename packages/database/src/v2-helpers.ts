@@ -80,6 +80,8 @@ export async function submitV2Booking(slots: V2BookingSlots, tenantId: string) {
       endTime,
       status: 'CONFIRMED',
       idempotencyKey,
+      customerName: customerName?.trim() || null,
+      phone: phone?.trim() || null,
     },
   });
 

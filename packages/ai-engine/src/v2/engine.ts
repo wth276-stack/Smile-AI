@@ -239,11 +239,15 @@ function buildSideEffects(
         startTime = `${draft.date}T${draft.time}:00`;
       }
       const serviceName = (draft.serviceDisplayName ?? draft.serviceName ?? '').trim();
+      const customerName = draft.customerName?.trim() ? draft.customerName.trim() : null;
+      const phone = draft.phone?.trim() ? draft.phone.trim() : null;
       effects.push({
         type: 'CREATE_BOOKING',
         data: {
           serviceName,
           startTime,
+          customerName,
+          phone,
         },
       });
     } else {

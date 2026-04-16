@@ -6,7 +6,7 @@ import { ContactsService } from '../contacts/contacts.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import { KnowledgeRetrieverService } from './knowledge-retriever.service';
 import { ChatPersistenceService } from './chat-persistence.service';
-import { bookingDraftHasAllRequiredSlots, runAiEngine } from '@ats/ai-engine';
+import { bookingDraftHasAllRequiredSlots, extractSlots, runAiEngine } from '@ats/ai-engine';
 import type { AiEngineInput, AiEngineResult, BookingDraft } from '@ats/ai-engine';
 import { getConversationBookingState, updateBookingDraft, mergeConversationMetadata } from '@ats/database';
 import type { ChatMessageDto } from './dto/chat-message.dto';
@@ -112,6 +112,12 @@ export class ChatService {
       externalContactId,
     );
 
+    const convRecordEarly = await this.prisma.conversation.findUnique({
+      where: { id: conversation.id },
+      select: { metadata: true },
+    });
+    const convMeta = (convRecordEarly?.metadata as Record<string, unknown> | null) ?? {};
+
     await this.conversations.addMessage(conversation.id, 'CUSTOMER', message);
 
     let recentMessages = await this.conversations.getRecentMessages(conversation.id, 20);
@@ -123,6 +129,7 @@ export class ChatService {
       bookingDraft: bookingDraftFromRun,
       conversationMode,
       confirmationPending: confirmationFromRun,
+      lastIntents = [],
       conversationStage,
       customerEmotion,
       customerResistance,
@@ -147,24 +154,21 @@ export class ChatService {
 
     // --- Session cutoff: detect stale completed booking + new booking intent ---
     const allSlotsFilled = bookingDraft && bookingDraftHasAllRequiredSlots(bookingDraft);
-    const isNewBookingIntent = /想預約|想book|預約|想做|book|我要預約/.test(message);
+    const isNewBookingIntent =
+      /想預約|想約|book|預約|想做|我要約|幫我約|想book|new booking|我要預約/i.test(message);
     if (allSlotsFilled && isNewBookingIntent) {
       this.logger.log(`Session cutoff: clearing stale draft + writing contextResetAt for conv=${conversation.id}`);
       await updateBookingDraft(conversation.id, null, false);
       await mergeConversationMetadata(conversation.id, {
         contextResetAt: new Date().toISOString(),
+        modifyCancelFlow: false,
       });
       bookingDraft = undefined;
       confirmationPending = false;
       recentMessages = [];
     } else {
       // Apply contextResetAt cutoff from a previous reset (for subsequent turns)
-      const convRecord = await this.prisma.conversation.findUnique({
-        where: { id: conversation.id },
-        select: { metadata: true },
-      });
-      const meta = convRecord?.metadata as Record<string, unknown> | null;
-      const cutoff = meta?.contextResetAt as string | undefined;
+      const cutoff = convMeta.contextResetAt as string | undefined;
       if (cutoff) {
         const cutoffTime = new Date(cutoff).getTime();
         recentMessages = recentMessages.filter(
@@ -188,10 +192,96 @@ export class ChatService {
       confirmationPending = false;
     }
 
+    const extracted = extractSlots(message);
+
+    const modifyCancelKeywords =
+      /改期|取消|取消預約|cancel|reschedule|改時間|修改預約|我想改|想改期|唔要個booking|取消booking/i;
+    const wantsModifyCancelContext =
+      modifyCancelKeywords.test(message) ||
+      lastIntents.some((i) => i === 'BOOKING_CHANGE' || i === 'BOOKING_CANCEL');
+
+    let modifyCancelFlow = Boolean(convMeta.modifyCancelFlow);
+    if (wantsModifyCancelContext) {
+      modifyCancelFlow = true;
+      await mergeConversationMetadata(conversation.id, { modifyCancelFlow: true });
+    }
+
+    const phoneForLookup = (bookingDraft?.phone?.trim() || extracted.phone?.trim() || '').trim();
+
+    /** 改期／取消 flow：一旦進入 modifyCancelFlow（或相關 intent），必跑 lookup；有電話用電話，冇電話用 conversation contactId。 */
+    const shouldLookupExisting =
+      modifyCancelFlow ||
+      wantsModifyCancelContext ||
+      lastIntents.some((i) => i === 'BOOKING_CHANGE' || i === 'BOOKING_CANCEL');
+
+    const emptyDraftBase: BookingDraft = {
+      bookingId: null,
+      mode: null,
+      serviceName: null,
+      serviceDisplayName: null,
+      date: null,
+      time: null,
+      customerName: null,
+      phone: null,
+    };
+
+    let bookingDraftForEngine: BookingDraft = {
+      ...(bookingDraft ?? emptyDraftBase),
+      phone: bookingDraft?.phone ?? extracted.phone ?? null,
+    };
+
+    if (wantsModifyCancelContext || modifyCancelFlow) {
+      const cancelIntent =
+        /取消|cancel/i.test(message) || lastIntents.some((i) => i === 'BOOKING_CANCEL');
+      bookingDraftForEngine = {
+        ...bookingDraftForEngine,
+        mode: cancelIntent ? 'cancel' : bookingDraftForEngine.mode ?? 'modify',
+      };
+    }
+
+    let existingBookings: AiEngineInput['existingBookings'] | undefined;
+    let bookingLookupEmpty: boolean | undefined;
+    let bookingLookupPhone: string | null | undefined;
+
+    if (shouldLookupExisting) {
+      const rows = await this.lookupUpcomingBookings(
+        tenantId,
+        phoneForLookup.length >= 8 ? phoneForLookup : null,
+        contact.id,
+      );
+      existingBookings = rows.map((b) => ({
+        id: b.id,
+        serviceName: b.serviceName,
+        startTime: b.startTime,
+        endTime: b.endTime,
+        status: b.status,
+        customerName: b.customerName,
+      }));
+      const displayPhone =
+        phoneForLookup.length >= 8
+          ? phoneForLookup
+          : contact.phone?.trim() ||
+            rows.find((r) => r.phone?.trim())?.phone?.trim() ||
+            '';
+      bookingLookupPhone = displayPhone || phoneForLookup || undefined;
+      if (rows.length === 0) bookingLookupEmpty = true;
+      if (rows.length === 1 && !bookingDraftForEngine.bookingId) {
+        const slots = this.bookingRowToDraftSlots(rows[0]);
+        bookingDraftForEngine = {
+          ...bookingDraftForEngine,
+          ...slots,
+          mode: bookingDraftForEngine.mode ?? 'modify',
+        };
+      }
+      this.logger.log(
+        `[chat.service] Booking lookup tenant=${tenantId} conv=${conversation.id} contact=${contact.id} phone=${bookingLookupPhone ?? '(none)'} count=${rows.length}`,
+      );
+    }
+
     const knowledge = await this.knowledgeRetriever.retrieveForMessage(
       tenantId,
       message,
-      bookingDraft,
+      bookingDraftForEngine,
     );
 
     console.log(
@@ -229,8 +319,15 @@ export class ChatService {
       })),
       currentMessage: message,
       knowledge,
-      bookingDraft,
-      activeBookingId: bookingDraft?.bookingId ?? undefined,
+      bookingDraft: bookingDraftForEngine,
+      ...(existingBookings !== undefined
+        ? {
+            existingBookings,
+            ...(bookingLookupPhone ? { bookingLookupPhone } : {}),
+            ...(bookingLookupEmpty ? { bookingLookupEmpty: true } : {}),
+          }
+        : {}),
+      activeBookingId: bookingDraftForEngine.bookingId ?? undefined,
       signals: {
         conversationMode,
         confirmationPending,
@@ -267,6 +364,19 @@ export class ChatService {
       result.sideEffects,
       result.signals?.bookingDraft,
     );
+
+    const hadBookingMutation = effectExecution.succeeded.some((e) =>
+      ['CREATE_BOOKING', 'MODIFY_BOOKING', 'CANCEL_BOOKING'].includes(e.type),
+    );
+    if (hadBookingMutation) {
+      try {
+        await mergeConversationMetadata(conversation.id, { modifyCancelFlow: false });
+      } catch (err) {
+        this.logger.warn(
+          `mergeConversationMetadata modifyCancelFlow: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
 
     await this.conversations.addMessage(
       conversation.id,
@@ -317,5 +427,167 @@ export class ChatService {
       enginePath: isDemoChat ? result.enginePath : undefined,
       fallbackReason: isDemoChat ? result.fallbackReason : undefined,
     };
+  }
+
+  private normalizePhoneDigits(s: string): string {
+    return s.replace(/\D/g, '');
+  }
+
+  private formatDateHkYmd(d: Date): string {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Hong_Kong',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+  }
+
+  private formatTimeHk(d: Date): string {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Hong_Kong',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(d);
+  }
+
+  /** Map DB booking row → draft slots for modify/cancel (single upcoming match). */
+  private bookingRowToDraftSlots(row: {
+    id: string;
+    serviceName: string;
+    startTime: Date;
+    customerName: string | null;
+    phone: string | null;
+  }): Pick<
+    BookingDraft,
+    | 'bookingId'
+    | 'serviceName'
+    | 'serviceDisplayName'
+    | 'date'
+    | 'time'
+    | 'customerName'
+    | 'phone'
+  > {
+    return {
+      bookingId: row.id,
+      serviceName: row.serviceName,
+      serviceDisplayName: row.serviceName,
+      date: this.formatDateHkYmd(row.startTime),
+      time: this.formatTimeHk(row.startTime),
+      customerName: row.customerName?.trim() ?? null,
+      phone: row.phone?.trim() ?? null,
+    };
+  }
+
+  private getHktStartOfToday(): Date {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Hong_Kong',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const parts = fmt.formatToParts(new Date());
+    const y = parts.find((p) => p.type === 'year')?.value;
+    const m = parts.find((p) => p.type === 'month')?.value;
+    const d = parts.find((p) => p.type === 'day')?.value;
+    return new Date(`${y}-${m}-${d}T00:00:00+08:00`);
+  }
+
+  /**
+   * Upcoming bookings for modify/cancel:
+   * - No usable phone digits: query by conversation `contactId` only (same-session flow after SUBMIT clears draft).
+   * - Phone ≥8 digits: scan + match contactId OR phone (last 8) on booking / linked contact.
+   */
+  private async lookupUpcomingBookings(
+    tenantId: string,
+    phone: string | null,
+    conversationContactId: string,
+  ): Promise<
+    Array<{
+      id: string;
+      serviceName: string;
+      startTime: Date;
+      endTime: Date | null;
+      status: string;
+      customerName: string | null;
+      phone: string | null;
+    }>
+  > {
+    const hktStart = this.getHktStartOfToday();
+    const digits = this.normalizePhoneDigits(phone ?? '');
+
+    const mapRow = (b: {
+      id: string;
+      serviceName: string;
+      startTime: Date;
+      endTime: Date | null;
+      status: string;
+      customerName: string | null;
+      phone: string | null;
+    }) => ({
+      id: b.id,
+      serviceName: b.serviceName,
+      startTime: b.startTime,
+      endTime: b.endTime,
+      status: b.status,
+      customerName: b.customerName,
+      phone: b.phone,
+    });
+
+    if (digits.length < 8) {
+      const rows = await this.prisma.booking.findMany({
+        where: {
+          tenantId,
+          contactId: conversationContactId,
+          status: { not: 'CANCELLED' },
+          startTime: { gte: hktStart },
+        },
+        orderBy: { startTime: 'asc' },
+        take: 10,
+        select: {
+          id: true,
+          serviceName: true,
+          startTime: true,
+          endTime: true,
+          status: true,
+          customerName: true,
+          phone: true,
+        },
+      });
+      return rows.map(mapRow);
+    }
+
+    const candidates = await this.prisma.booking.findMany({
+      where: {
+        tenantId,
+        status: { not: 'CANCELLED' },
+        startTime: { gte: hktStart },
+      },
+      orderBy: { startTime: 'asc' },
+      take: 200,
+      select: {
+        id: true,
+        serviceName: true,
+        startTime: true,
+        endTime: true,
+        status: true,
+        customerName: true,
+        phone: true,
+        contactId: true,
+        contact: { select: { phone: true } },
+      },
+    });
+
+    const last8 = digits.slice(-8);
+    const matches = candidates.filter((b) => {
+      if (b.contactId === conversationContactId) return true;
+      const bp = b.phone ? this.normalizePhoneDigits(b.phone) : '';
+      const cp = b.contact.phone ? this.normalizePhoneDigits(b.contact.phone) : '';
+      if (bp && bp.slice(-8) === last8) return true;
+      if (cp && cp.slice(-8) === last8) return true;
+      return false;
+    });
+
+    return matches.slice(0, 10).map(mapRow);
   }
 }

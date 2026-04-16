@@ -16,6 +16,8 @@ export interface ConversationState {
   bookingDraft: BookingDraft | undefined;
   conversationMode: string;
   confirmationPending: boolean;
+  /** Last persisted AI intents (from previous turn signals) */
+  lastIntents?: string[];
   // Decision Engine v1: Customer signals and strategy
   conversationStage?: string;
   customerEmotion?: string;
@@ -33,6 +35,7 @@ function errMsg(err: unknown): string {
  * When CREATE_BOOKING fails, do not persist a "complete" draft as if CRM succeeded:
  * clear date/time so the next turn re-collects slots, and stamp _integration for dashboards.
  */
+/** Spreads full `signals` so V2 `_auditPreBoundary` is preserved on CREATE_BOOKING failure rows. */
 function buildPersistedSignals(
   signals: DetectedSignals,
   bookingFailure: { message: string },
@@ -78,14 +81,22 @@ export class ChatPersistenceService {
         bookingDraft: undefined,
         conversationMode: 'GREETING',
         confirmationPending: false,
+        lastIntents: [],
       };
     }
 
     const signals = lastRun.signals as any;
+    const intentsRaw = signals.intents;
+    const lastIntents = Array.isArray(intentsRaw)
+      ? intentsRaw.map((x: unknown) => String(x))
+      : typeof intentsRaw === 'string'
+        ? [intentsRaw]
+        : [];
     return {
       bookingDraft: signals.bookingDraft as BookingDraft | undefined,
       conversationMode: signals.conversationMode ?? 'GREETING',
       confirmationPending: signals.confirmationPending ?? false,
+      lastIntents,
       // Decision Engine v1: load customer signals
       conversationStage: signals.conversationStage,
       customerEmotion: signals.customerEmotion,
@@ -160,27 +171,23 @@ export class ChatPersistenceService {
       try {
         switch (effect.type) {
           case 'CREATE_BOOKING': {
+            const customerName =
+              effect.data.customerName ?? bookingDraft?.customerName ?? null;
+            const phone = effect.data.phone ?? bookingDraft?.phone ?? null;
             const { created } = await this.bookings.upsertFromAiSideEffect(tenantId, contactId, {
               serviceName: effect.data.serviceName,
               startTime: new Date(effect.data.startTime),
               endTime: effect.data.endTime ? new Date(effect.data.endTime) : undefined,
               notes: effect.data.notes,
+              customerName,
+              phone,
             });
 
             if (bookingDraft) {
-              const contactUpdate: { name?: string; phone?: string } = {};
-              if (bookingDraft.customerName) contactUpdate.name = bookingDraft.customerName;
-              if (bookingDraft.phone) contactUpdate.phone = bookingDraft.phone;
-              if (Object.keys(contactUpdate).length > 0) {
-                try {
-                  await this.contacts.update(tenantId, contactId, contactUpdate);
-                  this.logger.log(
-                    `Updated contact ${contactId} from booking draft: ${JSON.stringify(contactUpdate)}`,
-                  );
-                } catch (err) {
-                  this.logger.warn(`Failed to update contact from booking draft: ${errMsg(err)}`);
-                }
-              }
+              await this.contacts.updateFromBookingDraftSafe(tenantId, contactId, {
+                customerName,
+                phone,
+              });
             }
 
             succeeded.push(effect);

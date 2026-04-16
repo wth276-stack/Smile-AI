@@ -50,7 +50,14 @@ export class BookingsService {
   async upsertFromAiSideEffect(
     tenantId: string,
     contactId: string,
-    data: { serviceName: string; startTime: Date; endTime?: Date; notes?: string },
+    data: {
+      serviceName: string;
+      startTime: Date;
+      endTime?: Date;
+      notes?: string;
+      customerName?: string | null;
+      phone?: string | null;
+    },
   ): Promise<{ booking: { id: string }; created: boolean }> {
     const startMs = data.startTime.getTime();
     const key = computeBookingIdempotencyKey(tenantId, contactId, data.serviceName, startMs);
@@ -69,6 +76,8 @@ export class BookingsService {
           startTime: data.startTime,
           endTime: data.endTime,
           notes: data.notes,
+          customerName: data.customerName?.trim() || null,
+          phone: data.phone?.trim() || null,
           idempotencyKey: key,
         },
       });
@@ -132,22 +141,28 @@ export class BookingsService {
       return existing;
     }
 
-    return this.prisma.booking.update({
-      where: { id: bookingId },
+    const updated = await this.prisma.booking.updateMany({
+      where: { id: bookingId, tenantId },
       data,
+    });
+    if (updated.count === 0) {
+      throw new Error(`Booking not found: ${bookingId}`);
+    }
+    return this.prisma.booking.findFirstOrThrow({
+      where: { id: bookingId, tenantId },
     });
   }
 
   async cancelBooking(tenantId: string, bookingId: string) {
-    const existing = await this.prisma.booking.findFirst({
+    const updated = await this.prisma.booking.updateMany({
       where: { id: bookingId, tenantId },
+      data: { status: 'CANCELLED' },
     });
-    if (!existing) {
+    if (updated.count === 0) {
       throw new Error(`Booking not found: ${bookingId}`);
     }
-    return this.prisma.booking.update({
-      where: { id: bookingId },
-      data: { status: 'CANCELLED' },
+    return this.prisma.booking.findFirstOrThrow({
+      where: { id: bookingId, tenantId },
     });
   }
 }

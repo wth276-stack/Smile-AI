@@ -201,7 +201,18 @@ export type SideEffectBookingChanges = {
 };
 
 export type SideEffect =
-  | { type: 'CREATE_BOOKING'; data: { serviceName: string; startTime: string; endTime?: string; notes?: string } }
+  | {
+      type: 'CREATE_BOOKING';
+      data: {
+        serviceName: string;
+        startTime: string;
+        endTime?: string;
+        notes?: string;
+        /** Identity fields from the merged draft at SUBMIT (V2). Optional for older V1 emits. */
+        customerName?: string | null;
+        phone?: string | null;
+      };
+    }
   | { type: 'MODIFY_BOOKING'; bookingId: string; changes: SideEffectBookingChanges }
   | { type: 'CANCEL_BOOKING'; bookingId: string }
   | { type: 'UPDATE_CONTACT'; data: { name?: string; phone?: string; email?: string } };

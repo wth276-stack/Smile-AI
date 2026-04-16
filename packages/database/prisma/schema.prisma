@@ -139,6 +139,9 @@ model Booking {
   startTime      DateTime
   endTime        DateTime?
   notes          String?
+  /// Snapshot from booking draft at creation (webchat contact may stay "Website Visitor")
+  customerName   String?
+  phone          String?
   /// SHA-256 hex from tenant+contact+service+startTime(ms); unique so AI retries cannot duplicate rows
   idempotencyKey String?       @unique @map("idempotency_key")
   createdAt      DateTime      @default(now())

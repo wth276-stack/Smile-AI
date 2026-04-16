@@ -46,6 +46,58 @@ export class ContactsService {
     });
   }
 
+  /**
+   * After CREATE_BOOKING: merge draft name/phone onto contact without failing on
+   * @@unique([tenantId, phone]) when another contact already owns that phone.
+   */
+  async updateFromBookingDraftSafe(
+    tenantId: string,
+    contactId: string,
+    draft: { customerName?: string | null; phone?: string | null },
+  ): Promise<void> {
+    try {
+      const name = draft.customerName?.trim() || undefined;
+      const phone = draft.phone?.trim() || undefined;
+      if (!name && !phone) return;
+
+      await this.prisma.contact.findFirstOrThrow({ where: { id: contactId, tenantId } });
+
+      if (phone) {
+        const existingOther = await this.prisma.contact.findFirst({
+          where: {
+            tenantId,
+            phone,
+            NOT: { id: contactId },
+          },
+        });
+        if (existingOther) {
+          if (name) {
+            await this.prisma.contact.update({
+              where: { id: contactId },
+              data: { name },
+            });
+          }
+          return;
+        }
+      }
+
+      const data: { name?: string; phone?: string } = {};
+      if (name) data.name = name;
+      if (phone) data.phone = phone;
+      if (Object.keys(data).length === 0) return;
+
+      await this.prisma.contact.update({
+        where: { id: contactId },
+        data,
+      });
+    } catch (err) {
+      console.warn(
+        '[Contact Update] Non-critical error (booking still saved):',
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+
   async resolveOrCreate(tenantId: string, externalContactId: string, name?: string) {
     const existing = await this.prisma.contact.findFirst({
       where: {

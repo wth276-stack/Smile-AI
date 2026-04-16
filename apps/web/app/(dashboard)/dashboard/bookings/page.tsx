@@ -11,6 +11,8 @@ interface Booking {
   endTime: string | null;
   notes: string | null;
   createdAt: string;
+  customerName?: string | null;
+  phone?: string | null;
   contact: { id: string; name: string | null; phone: string | null };
 }
 
@@ -74,7 +76,9 @@ export default function BookingsPage() {
             <tbody>
               {data.items.map((b) => (
                 <tr key={b.id} className="border-b border-[var(--border)] last:border-0">
-                  <td className="px-4 py-3">{b.contact.name || b.contact.phone || '未知'}</td>
+                  <td className="px-4 py-3">
+                    {b.customerName || b.contact.name || b.phone || b.contact.phone || '未知'}
+                  </td>
                   <td className="px-4 py-3">{b.serviceName}</td>
                   <td className="px-4 py-3">{formatDateTime(b.startTime)}</td>
                   <td className="px-4 py-3">

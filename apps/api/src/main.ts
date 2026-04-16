@@ -27,17 +27,26 @@ async function bootstrap() {
   const appUrl = process.env.APP_URL || 'http://localhost:3000';
   const localDevOrigin =
     /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+  const extraCorsOrigins = (process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const allowOrigin = (origin: string | undefined): boolean => {
+    if (!origin) return true;
+    if (extraCorsOrigins.includes(origin)) return true;
+    if (origin === appUrl) return true;
+    if (!isProd && localDevOrigin.test(origin)) return true;
+    return false;
+  };
+
   app.enableCors({
-    origin: isProd
-      ? appUrl
-      : (
-          origin: string | undefined,
-          cb: (err: Error | null, allow?: boolean) => void,
-        ) => {
-          if (!origin) return cb(null, true);
-          if (localDevOrigin.test(origin) || origin === appUrl) return cb(null, true);
-          cb(null, false);
-        },
+    origin: (
+      origin: string | undefined,
+      cb: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      cb(null, allowOrigin(origin));
+    },
     credentials: true,
   });
 

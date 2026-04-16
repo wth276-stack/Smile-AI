@@ -26,6 +26,8 @@ export interface BookingDraftState extends BookingDraft {
 
 export function emptyDraft(): BookingDraft {
   return {
+    bookingId: null,
+    mode: null,
     serviceName: null,
     serviceDisplayName: null,
     date: null,

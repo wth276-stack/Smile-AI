@@ -1,5 +1,5 @@
 import type { PromptContext, BookingDraft, KnowledgeChunk } from './types';
-import { getHKTToday } from './date-utils';
+import { formatDateHKYmd, getHKTToday } from './date-utils';
 
 export function formatKnowledgeChunks(
   chunks: KnowledgeChunk[],
@@ -97,13 +97,21 @@ export function resolveKbDefaults(businessType: string): {
 }
 
 function formatDraftState(draft: BookingDraft): string {
-  const fields = [
+  const fields: [string, string | null | undefined][] = [];
+  if (draft.bookingId) fields.push(['預約 ID (bookingId)', draft.bookingId]);
+  if (draft.mode && draft.mode !== 'new') {
+    fields.push([
+      '流程',
+      draft.mode === 'modify' ? '改期' : draft.mode === 'cancel' ? '取消' : String(draft.mode),
+    ]);
+  }
+  fields.push(
     ['服務', draft.serviceDisplayName ?? draft.serviceName],
     ['日期', draft.date],
     ['時間', draft.time],
     ['客戶姓名', draft.customerName],
     ['電話', draft.phone],
-  ];
+  );
 
   const filled = fields.filter(([, v]) => v);
   const missing = fields.filter(([, v]) => !v);
@@ -123,14 +131,31 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   const kbDefaults = resolveKbDefaults(businessType);
   const kb = formatKnowledgeChunks(ctx.knowledgeChunks, kbDefaults);
   const draft = formatDraftState(ctx.currentDraft);
-  const bookingsSection = ctx.existingBookings && ctx.existingBookings.length > 0
-    ? `\n\n## Customer's Upcoming Bookings\n${ctx.existingBookings.map((b, i) => {
-        const d = new Date(b.startTime);
-        const dateStr = d.toISOString().split('T')[0];
-        const timeStr = d.toTimeString().slice(0, 5);
-        return `${i + 1}. [ID: ${b.id}] ${b.serviceName} — ${dateStr} ${timeStr} (${b.status})`;
-      }).join('\n')}`
-    : '';
+
+  let bookingsSection = '';
+  const phoneForListing =
+    (ctx.bookingLookupPhone && String(ctx.bookingLookupPhone).trim()) ||
+    (ctx.currentDraft?.phone && String(ctx.currentDraft.phone).trim()) ||
+    '';
+
+  if (ctx.bookingLookupEmpty && ctx.bookingLookupPhone) {
+    bookingsSection = `\n\n## 客戶現有預約\n查無即將預約（電話：${ctx.bookingLookupPhone}）。請確認電話號碼是否正確。`;
+  } else if (ctx.existingBookings && ctx.existingBookings.length > 0) {
+    const lines = ctx.existingBookings.map((b, i) => {
+      const d = new Date(b.startTime);
+      const dateStr = formatDateHKYmd(d);
+      const timeStr = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Hong_Kong',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(d);
+      const name = b.customerName?.trim() ? b.customerName.trim() : '（未填姓名）';
+      return `${i + 1}. [ID: ${b.id}] ${b.serviceName}，${dateStr} ${timeStr}，${name}`;
+    });
+    const phoneLine = phoneForListing || '（見草稿或對話）';
+    bookingsSection = `\n\n## 客戶現有預約\n以下是電話 ${phoneLine} 的即將預約：\n${lines.join('\n')}`;
+  }
   const draftName = ctx.currentDraft?.customerName;
   const greeting = draftName
     ? `The customer's name for this booking is ${draftName}. Use it naturally when appropriate.`
