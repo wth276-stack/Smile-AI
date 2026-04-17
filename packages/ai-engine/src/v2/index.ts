@@ -5,5 +5,9 @@ export {
   formatKnowledgeChunks,
   resolveKbDefaults,
 } from './prompt';
-export { validateOutput } from './validator';
+export {
+  validateOutput,
+  DUPLICATE_AFFIRM_GUARD_ISSUE,
+  isServiceRecognizedInKnowledge,
+} from './validator';
 export { runAiEngineV2 } from './engine';

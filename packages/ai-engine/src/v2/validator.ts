@@ -1,7 +1,50 @@
 import type { BookingDraft, KnowledgeChunk } from '../types';
 import { bookingDraftHasAllRequiredSlots } from '../booking-state';
+import { buildServiceCatalog, matchService } from '../service-matcher';
 import { isBookingConfirmationRejectionMessage } from './booking-confirmation-rejection';
 import { getHKTToday } from './date-utils';
+
+/** Issue string when SUBMIT_BOOKING is coerced to REPLY_ONLY (duplicate affirm / no confirmation pending). */
+export const DUPLICATE_AFFIRM_GUARD_ISSUE =
+  'SUBMIT_BOOKING without confirmationPending — not finalizing (duplicate-affirm guard)';
+
+/**
+ * True if the service string matches KB via catalog matcher or title/aliases fallback.
+ * exact/close/ambiguous all count as recognized (ambiguous is not treated as not-found).
+ */
+export function isServiceRecognizedInKnowledge(
+  candidate: string,
+  knowledgeChunks: KnowledgeChunk[],
+): boolean {
+  const trimmed = candidate.trim();
+  if (!trimmed) return true;
+
+  const catalog = buildServiceCatalog(knowledgeChunks);
+  const m = matchService(trimmed, catalog);
+  if (m.type === 'exact' || m.type === 'close' || m.type === 'ambiguous') {
+    return true;
+  }
+
+  const normalise = (s: string) => s.toLowerCase().replace(/\s+/g, '');
+  const b = normalise(trimmed);
+
+  const chunkTitleAliasHit = knowledgeChunks.some((c) => {
+    const titles = [c.title, ...(c.aliases ?? [])].filter(Boolean) as string[];
+    return titles.some((title) => {
+      const a = normalise(title);
+      return a.includes(b) || b.includes(a);
+    });
+  });
+  if (chunkTitleAliasHit) return true;
+
+  return catalog.some((s) => {
+    const pool = [s.displayName, ...s.aliases];
+    return pool.some((p) => {
+      const a = normalise(p);
+      return a.includes(b) || b.includes(a);
+    });
+  });
+}
 
 /** Normalize empty / whitespace LLM output so ?? fallback keeps prior slots (json_object often sends ""). */
 function orNull(v: unknown): string | null {
@@ -241,24 +284,15 @@ export function validateOutput(
   }
 
   const mergedDraft = mergeBookingDraft(ctx.currentDraft, newSlots);
-  const normalise = (s: string) => s.toLowerCase().replace(/\s+/g, '');
-  const kbTitles = ctx.knowledgeChunks.map((c) => c.title);
-  const isFuzzyServiceMatch = (candidate: string) => {
-    const b = normalise(candidate);
-    return kbTitles.some((title) => {
-      const a = normalise(title);
-      return a.includes(b) || b.includes(a);
-    });
-  };
 
   if (newSlots.serviceDisplayName) {
-    if (!isFuzzyServiceMatch(newSlots.serviceDisplayName)) {
+    if (!isServiceRecognizedInKnowledge(newSlots.serviceDisplayName, ctx.knowledgeChunks)) {
       issues.push(`Service "${newSlots.serviceDisplayName}" not found in KB`);
     }
   }
 
   if (newSlots.serviceName) {
-    if (!isFuzzyServiceMatch(newSlots.serviceName)) {
+    if (!isServiceRecognizedInKnowledge(newSlots.serviceName, ctx.knowledgeChunks)) {
       issues.push(`Service "${newSlots.serviceName}" not found in KB`);
     }
   }
@@ -347,7 +381,7 @@ export function validateOutput(
     mergedDraft.mode !== 'cancel'
   ) {
     action = 'REPLY_ONLY';
-    issues.push('SUBMIT_BOOKING without confirmationPending — not finalizing (duplicate-affirm guard)');
+    issues.push(DUPLICATE_AFFIRM_GUARD_ISSUE);
   }
 
   return {
