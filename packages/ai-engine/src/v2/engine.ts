@@ -31,6 +31,24 @@ import { matchService } from '../service-matcher';
 
 const FALLBACK_REPLY = '抱歉，系統暫時遇到問題，請稍後再試 🙏';
 
+/**
+ * Second-affirm / stray path: after CREATE (or when confirmationPending is false), the model may
+ * return REPLY_ONLY / REPLY / CONFIRM_BOOKING instead of SUBMIT_BOOKING — duplicate-affirm guard
+ * never runs, but Case 3 would still replace the reply with a confirmation template. Skip that.
+ */
+function shouldSkipCase3WhenAffirmingWithoutPending(
+  input: AiEngineInput,
+  finalMergedDraft: BookingDraft,
+  finalAction: string,
+): boolean {
+  if (input.signals?.confirmationPending) return false;
+  const mode = finalMergedDraft.mode;
+  if (mode === 'modify' || mode === 'cancel') return false;
+  if (!bookingDraftHasAllRequiredSlots(finalMergedDraft)) return false;
+  if (!isConfirmationMessage(input.currentMessage)) return false;
+  return ['REPLY_ONLY', 'REPLY', 'CONFIRM_BOOKING'].includes(finalAction);
+}
+
 const MAX_HISTORY = 10;
 const API_TIMEOUT_MS = 60_000;
 
@@ -796,10 +814,21 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
 
     {
       const duplicateAffirmGuard = validated.validationIssues.includes(DUPLICATE_AFFIRM_GUARD_ISSUE);
+      const affirmWithoutPendingCase3 = shouldSkipCase3WhenAffirmingWithoutPending(
+        input,
+        finalMergedDraft,
+        finalAction,
+      );
+      const skipCase3Template = duplicateAffirmGuard || affirmWithoutPendingCase3;
+      if (affirmWithoutPendingCase3 && !duplicateAffirmGuard) {
+        console.warn(
+          '[v2/engine] Skip Case 3 template: affirmation without confirmationPending (non-SUBMIT path; e.g. REPLY/CONFIRM after duplicate turn)',
+        );
+      }
       const boundary = applyConfirmationBoundaryPostProcess(finalMergedDraft, finalReply, finalAction, {
         currentMessage: input.currentMessage,
         confirmationPending: !!input.signals?.confirmationPending,
-        skipDeterministicConfirmationTemplate: duplicateAffirmGuard,
+        skipDeterministicConfirmationTemplate: skipCase3Template,
       });
       finalReply = boundary.reply;
       finalAction = boundary.action;

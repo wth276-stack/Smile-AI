@@ -36,4 +36,15 @@ describe('applyConfirmationBoundaryPostProcess', () => {
     expect(out.reply).toBe(shortReply);
     expect(out.action).toBe('REPLY_ONLY');
   });
+
+  it('skips Case 3 when skip is true and action is CONFIRM_BOOKING (non-SUBMIT second-affirm path)', () => {
+    const shortReply = '收到，幫你跟進～';
+    const out = applyConfirmationBoundaryPostProcess(fullDraft, shortReply, 'CONFIRM_BOOKING', {
+      confirmationPending: false,
+      skipDeterministicConfirmationTemplate: true,
+    });
+    expect(out.usedTemplate).toBe(false);
+    expect(out.reply).toBe(shortReply);
+    expect(out.action).toBe('CONFIRM_BOOKING');
+  });
 });
