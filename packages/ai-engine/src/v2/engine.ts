@@ -14,7 +14,12 @@ import type {
   AuditPreBoundarySnapshot,
 } from './types';
 import { buildMessages } from './prompt';
-import { mergeBookingDraft, validateOutput, isConfirmationMessage } from './validator';
+import {
+  mergeBookingDraft,
+  validateOutput,
+  isConfirmationMessage,
+  DUPLICATE_AFFIRM_GUARD_ISSUE,
+} from './validator';
 import { applyConfirmationBoundaryPostProcess } from './confirmation-boundary';
 import {
   bookingDraftHasAllRequiredSlots,
@@ -790,9 +795,11 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     };
 
     {
+      const duplicateAffirmGuard = validated.validationIssues.includes(DUPLICATE_AFFIRM_GUARD_ISSUE);
       const boundary = applyConfirmationBoundaryPostProcess(finalMergedDraft, finalReply, finalAction, {
         currentMessage: input.currentMessage,
         confirmationPending: !!input.signals?.confirmationPending,
+        skipDeterministicConfirmationTemplate: duplicateAffirmGuard,
       });
       finalReply = boundary.reply;
       finalAction = boundary.action;

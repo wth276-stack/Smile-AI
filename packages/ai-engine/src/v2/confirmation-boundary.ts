@@ -220,6 +220,11 @@ export interface ConfirmationBoundaryOptions {
   currentMessage?: string;
   /** True when the previous turn ended in CONFIRM_BOOKING / awaiting confirmation. */
   confirmationPending?: boolean;
+  /**
+   * When set (e.g. duplicate-affirm guard coerced SUBMIT → REPLY_ONLY), skip Case 3
+   * deterministic confirmation template so the reply does not look like pending confirmation.
+   */
+  skipDeterministicConfirmationTemplate?: boolean;
 }
 
 /**
@@ -263,6 +268,9 @@ export function applyConfirmationBoundaryPostProcess(
   const complete = replyReflectsDraftForConfirmation(reply, mergedDraft);
 
   if (!complete) {
+    if (opts?.skipDeterministicConfirmationTemplate) {
+      return { reply, action, usedTemplate: false };
+    }
     return {
       reply: buildDeterministicConfirmationReply(mergedDraft),
       action: 'CONFIRM_BOOKING',
