@@ -12,6 +12,7 @@ import { ChatModule } from './modules/chat/chat.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { HealthModule } from './modules/health/health.module';
 import { DemoModule } from './demo/demo.module';
+import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { DemoModule } from './demo/demo.module';
     DashboardModule,
     HealthModule,
     DemoModule,
+    WhatsappModule,
   ],
 })
 export class AppModule {}

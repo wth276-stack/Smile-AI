@@ -103,7 +103,7 @@ export class ChatService {
     const isDemoChat =
       tenantId === 'demo-tenant' && channel === 'WEBCHAT' && (contactName ?? '') === 'Demo User';
 
-    const contact = await this.contacts.resolveOrCreate(tenantId, externalContactId, contactName);
+    const contact = await this.contacts.resolveOrCreate(tenantId, externalContactId, contactName, channel);
 
     const conversation = await this.conversations.resolveOrCreate(
       tenantId,

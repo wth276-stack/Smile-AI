@@ -98,11 +98,14 @@ export class ContactsService {
     }
   }
 
-  async resolveOrCreate(tenantId: string, externalContactId: string, name?: string) {
+  async resolveOrCreate(tenantId: string, externalContactId: string, name?: string, channel: string = 'WEBCHAT') {
+    const channelKey = channel.toLowerCase();
+
+    // 1. Try exact match on externalIds[channelKey]
     const existing = await this.prisma.contact.findFirst({
       where: {
         tenantId,
-        externalIds: { path: ['webchat'], equals: externalContactId },
+        externalIds: { path: [channelKey], equals: externalContactId },
       },
     });
 
@@ -116,11 +119,31 @@ export class ContactsService {
       return existing;
     }
 
+    // 2. For WhatsApp, try matching by phone as cautious fallback
+    if (channelKey === 'whatsapp') {
+      const byPhone = await this.prisma.contact.findFirst({
+        where: { tenantId, phone: externalContactId },
+      });
+      if (byPhone) {
+        const mergedExternalIds = {
+          ...((byPhone.externalIds as Record<string, unknown>) ?? {}),
+          [channelKey]: externalContactId,
+        };
+        const data: Record<string, unknown> = { externalIds: mergedExternalIds };
+        if (name && !byPhone.name) data.name = name;
+        return this.prisma.contact.update({
+          where: { id: byPhone.id },
+          data,
+        });
+      }
+    }
+
+    // 3. Create new contact
     return this.prisma.contact.create({
       data: {
         tenantId,
         name: name || null,
-        externalIds: { webchat: externalContactId },
+        externalIds: { [channelKey]: externalContactId },
       },
     });
   }

@@ -190,6 +190,14 @@ export class KnowledgeBaseService {
     const chineseChars = message.replace(/[^\u4e00-\u9fff]/g, '');
     const stripped = chineseChars.replace(/[我你的了是在有和就不也都要會可以可這那到說想買請問請幫嗎呢吧啊喔哦嘛啦]/g, '');
 
+    // Retrieval hints: align query with KB phrasing (minimal keyword injection).
+    if (/維持|幾耐|多久|持續|效果/.test(message)) {
+      keywords.push('維持', '個月');
+    }
+    if (/包含|包咩|有咩內容|套餐/.test(message)) {
+      keywords.push('包含', '套餐');
+    }
+
     if (stripped.length >= 2) {
       keywords.push(stripped);
       for (let i = 0; i < stripped.length - 1; i++) {

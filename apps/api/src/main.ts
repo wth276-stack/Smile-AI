@@ -6,10 +6,10 @@ import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const logger = new Logger('Bootstrap');
 
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', { exclude: ['whatsapp/webhook'] });
 
   app.useGlobalPipes(
     new ValidationPipe({

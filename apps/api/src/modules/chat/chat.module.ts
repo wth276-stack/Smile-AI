@@ -13,5 +13,6 @@ import { KnowledgeBaseModule } from '../knowledge-base/knowledge-base.module';
   imports: [ContactsModule, ConversationsModule, BookingsModule, KnowledgeBaseModule],
   controllers: [ChatController, PublicChatController],
   providers: [ChatService, KnowledgeRetrieverService, ChatPersistenceService],
+  exports: [ChatService],
 })
 export class ChatModule {}
