@@ -70,19 +70,18 @@ describe('WhatsApp booking flow regression', () => {
 
     it('WhatsApp auto-fill: customerName from profile, but extracted name takes priority', () => {
       // Priority: bookingDraft?.customerName > extracted.customerName > contactName
-      // User types "Yuki" in message → extracted.customerName = "Yuki"
-      // WhatsApp profile name = "Louis Wong"
-      // Result: "Yuki" wins (user typed it explicitly)
-      const draftName = 'Yuki';
-      const extractedName: string | null = null;
-      const contactName = 'Louis Wong';
+      const resolveName = (
+        draftName: string | null,
+        extractedName: string | null,
+        contactName: string | null,
+      ) => draftName ?? extractedName ?? contactName;
 
-      const result = draftName ?? extractedName ?? contactName;
-      expect(result).toBe('Yuki');
-
-      // If user didn't type a name, fall back to WhatsApp profile name
-      const result2 = null ?? null ?? contactName;
-      expect(result2).toBe('Louis Wong');
+      // User types "Yuki" → draft name wins over WhatsApp profile name
+      expect(resolveName('Yuki', null, 'Louis Wong')).toBe('Yuki');
+      // Extracted name wins over WhatsApp profile name (user typed it in message)
+      expect(resolveName(null, 'Yuki', 'Louis Wong')).toBe('Yuki');
+      // No draft or extracted name → fall back to WhatsApp profile name
+      expect(resolveName(null, null, 'Louis Wong')).toBe('Louis Wong');
     });
   });
 
