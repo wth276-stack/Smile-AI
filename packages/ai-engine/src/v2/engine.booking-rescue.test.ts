@@ -74,10 +74,10 @@ describe('WhatsApp booking flow regression', () => {
       // WhatsApp profile name = "Louis Wong"
       // Result: "Yuki" wins (user typed it explicitly)
       const draftName = 'Yuki';
-      const extractedName: string | null = null;
       const contactName = 'Louis Wong';
 
-      const result = draftName ?? extractedName ?? contactName;
+      // extractedName is null here; use null directly to avoid TS2871 (always nullish)
+      const result = draftName ?? null ?? contactName;
       expect(result).toBe('Yuki');
 
       // If user didn't type a name, fall back to WhatsApp profile name
