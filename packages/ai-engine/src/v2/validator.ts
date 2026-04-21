@@ -96,6 +96,32 @@ interface LlmRawOutput {
 }
 
 /**
+ * Check if an assistant reply looks like a booking confirmation summary.
+ * Catches explicit confirmation phrases, or when the reply lists multiple booking
+ * fields (service, date, time, name, phone) — indicators of a summary presented
+ * for the customer to confirm. Price alone is NOT a booking summary marker.
+ */
+function replyHasConfirmationSummary(reply: string): boolean {
+  if (!reply) return false;
+  const r = reply.toLowerCase();
+
+  // Explicit confirmation request phrases
+  if (/請確認|是否正確|確認.*預約|預約.*確認|幫你確認|幫您確認|以上資料|預約詳情|預約資料|預約如下|確認以上|please confirm/i.test(r)) {
+    return true;
+  }
+
+  // Booking-specific field markers (NOT price)
+  const hasService = /hifu|療程|facial|套餐|服務[:：]/i.test(r);
+  const hasDate = /\d{4}-\d{2}-\d{2}|\d{1,2}月\d{1,2}日|星期[一二三四五六日]/i.test(r);
+  const hasTime = /\d{1,2}:\d{2}|\d{1,2}點/i.test(r);
+  const hasName = /客戶姓名|姓名[:：]/i.test(r);
+  const hasPhone = /電話[:：]|\b\d{8}\b/i.test(r);
+
+  const fieldCount = [hasService, hasDate, hasTime, hasName, hasPhone].filter(Boolean).length;
+  return fieldCount >= 3;
+}
+
+/**
  * Check if the user's message is a confirmation / affirmation.
  * Handles Cantonese, Mandarin, and English variations.
  */
@@ -311,6 +337,21 @@ export function validateOutput(
   if ((action === 'MODIFY_BOOKING' || action === 'CANCEL_BOOKING') && !mergedDraft.bookingId) {
     issues.push(`${action} requires a bookingId`);
     action = 'REPLY_ONLY';
+  }
+
+  // ── Deterministic coercion: REPLY with full draft + confirmation summary → CONFIRM_BOOKING ──
+  // LLM sometimes returns action=REPLY even when the reply is clearly a booking confirmation summary.
+  // Without this, confirmationPending never gets set, and the next user affirmation hits duplicate-affirm guard.
+  if (
+    (action === 'REPLY' || action === 'REPLY_ONLY') &&
+    mergedDraft.mode !== 'modify' &&
+    mergedDraft.mode !== 'cancel' &&
+    bookingDraftHasAllRequiredSlots(mergedDraft) &&
+    replyHasConfirmationSummary(reply)
+  ) {
+    action = 'CONFIRM_BOOKING';
+    issues.push('Override: REPLY → CONFIRM_BOOKING (full draft + reply is confirmation summary)');
+    console.warn('[v2/validator] Override: REPLY → CONFIRM_BOOKING (deterministic: full draft + summary)');
   }
 
   // Simple fallback: confirmation text + full draft already on currentDraft, but LLM said REPLY

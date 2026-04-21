@@ -233,7 +233,6 @@ export class ChatService {
     let bookingDraftForEngine: BookingDraft = {
       ...(bookingDraft ?? emptyDraftBase),
       phone: bookingDraft?.phone ?? extracted.phone ?? waPhone ?? null,
-      customerName: bookingDraft?.customerName ?? extracted.customerName ?? (channel === 'WHATSAPP' ? contactName ?? null : null),
     };
 
     if (wantsModifyCancelContext || modifyCancelFlow) {

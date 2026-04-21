@@ -1,9 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import type { BookingDraft } from '../types';
-import { mergeBookingDraft } from './validator';
+import { mergeBookingDraft, validateOutput } from './validator';
 import { getMissingBookingSlots, bookingDraftHasAllRequiredSlots } from '../booking-state';
 
 // ── Test the core logic flows without OpenAI dependency ──
+
+const FULL_DRAFT: BookingDraft = {
+  bookingId: null,
+  mode: null,
+  serviceName: 'HIFU 高強度聚焦超聲波',
+  serviceDisplayName: 'HIFU 高強度聚焦超聲波',
+  date: '2026-04-23',
+  time: '16:00',
+  customerName: 'Yuki',
+  phone: '64991498',
+};
 
 const EMPTY_DRAFT: BookingDraft = {
   bookingId: null,
@@ -151,6 +162,109 @@ describe('WhatsApp booking flow regression', () => {
       expect(result.time).toBe('16:00'); // LLM value preserved
       expect(result.customerName).toBe('Yuki'); // rescue filled
       expect(result.phone).toBe('64991498'); // rescue filled
+    });
+  });
+
+  describe('Deterministic CONFIRM_BOOKING coercion', () => {
+    const kbChunks = [
+      { documentId: 'svc-hifu', title: 'HIFU 高強度聚焦超聲波', content: 'HIFU 療程', score: 1, aliases: ['hifu'] },
+    ];
+
+    it('REPLY + full draft + confirmation summary reply → coerced to CONFIRM_BOOKING', () => {
+      const result = validateOutput(
+        {
+          replyText: '好的，Yuki！我已經為你預約了 HIFU 療程。以下是預約詳情：\n- 服務：HIFU\n- 日期：2026-04-23（星期四）\n- 時間：16:00\n- 客戶姓名：Yuki\n- 電話：64991498\n\n請確認以上資料是否正確！',
+          intents: ['BOOKING_REQUEST'],
+          newSlots: {},
+          action: 'REPLY',
+        },
+        {
+          currentDraft: FULL_DRAFT,
+          knowledgeChunks: kbChunks,
+          confirmationPending: false,
+        },
+      );
+
+      expect(result.action).toBe('CONFIRM_BOOKING');
+      expect(result.validationIssues).toContain('Override: REPLY → CONFIRM_BOOKING (full draft + reply is confirmation summary)');
+    });
+
+    it('REPLY + full draft + 請確認 phrase → coerced to CONFIRM_BOOKING', () => {
+      const result = validateOutput(
+        {
+          replyText: '幫你確認以下預約：HIFU 療程，4月23號4點。',
+          intents: ['BOOKING_REQUEST'],
+          newSlots: {},
+          action: 'REPLY',
+        },
+        {
+          currentDraft: FULL_DRAFT,
+          knowledgeChunks: kbChunks,
+          confirmationPending: false,
+        },
+      );
+
+      expect(result.action).toBe('CONFIRM_BOOKING');
+    });
+
+    it('REPLY + price inquiry → stays REPLY (not coerced)', () => {
+      const result = validateOutput(
+        {
+          replyText: 'HIFU 療程現時優惠價 $1,200（原價 $3,800），療程時間約60-90分鐘。有興趣可以預約！',
+          intents: ['PRICE_INQUIRY'],
+          newSlots: {},
+          action: 'REPLY',
+        },
+        {
+          currentDraft: FULL_DRAFT,
+          knowledgeChunks: kbChunks,
+          confirmationPending: false,
+        },
+      );
+
+      expect(result.action).toBe('REPLY');
+    });
+
+    it('REPLY + service inquiry without booking fields → stays REPLY', () => {
+      const result = validateOutput(
+        {
+          replyText: '我哋有提供 HIFU 緊緻療程，效果可以維持12-18個月。你想了解更多定想預約？',
+          intents: ['PRODUCT_INQUIRY'],
+          newSlots: {},
+          action: 'REPLY',
+        },
+        {
+          currentDraft: EMPTY_DRAFT,
+          knowledgeChunks: kbChunks,
+          confirmationPending: false,
+        },
+      );
+
+      expect(result.action).toBe('REPLY');
+    });
+
+    it('REPLY + partial draft (missing phone) → stays REPLY (not enough slots)', () => {
+      const partialDraft: BookingDraft = {
+        ...FULL_DRAFT,
+        phone: null,
+      };
+
+      const result = validateOutput(
+        {
+          replyText: '好的，請確認以上預約資料是否正確！',
+          intents: ['BOOKING_REQUEST'],
+          newSlots: {},
+          action: 'REPLY',
+        },
+        {
+          currentDraft: partialDraft,
+          knowledgeChunks: kbChunks,
+          confirmationPending: false,
+        },
+      );
+
+      // Not all slots filled → should NOT coerce to CONFIRM_BOOKING
+      expect(result.action).toBe('REPLY');
     });
   });
 });
