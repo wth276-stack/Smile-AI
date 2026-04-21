@@ -325,41 +325,54 @@ function buildFallbackResult(durationMs: number): AiEngineResult {
   };
 }
 
-/* ── Bug 2 fix：如果 LLM 冇填 serviceName 但 reply 提到已知服務，自動補上 ── */
+/* ── Bug 2 fix：如果 LLM 冇填 serviceName 但 reply 或 user message 提到已知服務，自動補上 ── */
 function inferMissingService(
   newSlots: Partial<BookingDraft>,
   mergedDraft: BookingDraft,
   replyText: string,
   knowledge: unknown[],
+  userMessage?: string,
 ): Partial<BookingDraft> {
   if (mergedDraft.serviceName || newSlots.serviceName) return newSlots;
 
-  const servicePatterns: { name: string; display: string }[] = [];
+  // Build service catalog from knowledge chunks (title + aliases)
+  const catalog: ServiceEntry[] = [];
   for (const chunk of knowledge) {
-    const text = typeof chunk === 'string' ? chunk : JSON.stringify(chunk);
-    const match = text.match(/【(.+?)】/);
-    if (match) {
-      servicePatterns.push({ name: match[1], display: match[1] });
+    const c = chunk as Record<string, unknown>;
+    const title = typeof c.title === 'string' ? c.title.trim() : '';
+    const aliases = Array.isArray(c.aliases) ? c.aliases : [];
+    if (title) {
+      catalog.push({
+        code: title,
+        displayName: title,
+        aliases: [...aliases, title],
+        priceInfo: null,
+        fullInfo: '',
+      });
     }
   }
 
-  for (const svc of servicePatterns) {
-    if (replyText.includes(svc.display)) {
-      console.log(`[v2/engine] Auto-inferred missing serviceName: ${svc.name}`);
-      return {
-        ...newSlots,
-        serviceName: svc.name,
-        serviceDisplayName: svc.display,
-      };
-    }
+  // Search in reply text AND user message
+  const searchTexts = [replyText];
+  if (userMessage) searchTexts.push(userMessage);
+
+  const result = matchService(searchTexts.join(' '), catalog);
+  if ((result.type === 'exact' || result.type === 'close') && result.matches.length > 0) {
+    const best = result.matches[0];
+    console.log(`[v2/engine] Auto-inferred missing serviceName: ${best.service.displayName}`);
+    return {
+      ...newSlots,
+      serviceName: best.service.code,
+      serviceDisplayName: best.service.displayName,
+    };
   }
 
   return newSlots;
 }
 
 /**
- * Fallback: when LLM returns REPLY with no newSlots, deterministically extract
- * service / date / time from the user message so slots don't silently disappear.
+ * Fallback: deterministically extract service / date / time from the user message
+ * so slots don't silently disappear. Only fills slots that are missing in the merged draft.
  */
 function deterministicSlotFallback(
   userMessage: string,
@@ -367,9 +380,6 @@ function deterministicSlotFallback(
   mergedDraft: BookingDraft,
   knowledge: unknown[],
 ): Partial<BookingDraft> {
-  const hasNewSlot = newSlots.serviceName || newSlots.date || newSlots.time
-    || newSlots.customerName || newSlots.phone;
-  if (hasNewSlot) return newSlots;
 
   const patched = { ...newSlots };
   let changed = false;
@@ -704,25 +714,38 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
       console.warn('[v2/engine] Validation issues:', validated.validationIssues);
     }
 
-    /* Bug 2 fix：自動補漏 serviceName */
+    /* Bug 2 fix：自動補漏 serviceName — also search user message, not just reply */
     let finalNewSlots = inferMissingService(
       validated.newSlots,
       validated.mergedDraft,
       normalized.replyText,
       input.knowledge,
+      input.currentMessage,
     );
 
-    // Fallback: if LLM returned REPLY/REPLY_ONLY with no newSlots, extract deterministically
+    // Fallback: extract remaining slots deterministically from user message
+    // when LLM didn't fill all fields (covers REPLY, REPLY_ONLY, COLLECT_BOOKING)
+    const mergedAfterInfer = mergeBookingDraft(validated.mergedDraft, finalNewSlots);
     if (
-      (validated.action === 'REPLY' || validated.action === 'REPLY_ONLY') &&
-      !finalNewSlots.serviceName && !finalNewSlots.date && !finalNewSlots.time
+      (validated.action === 'REPLY' || validated.action === 'REPLY_ONLY' || validated.action === 'COLLECT_BOOKING') &&
+      getMissingBookingSlots(mergedAfterInfer).length > 0
     ) {
-      finalNewSlots = deterministicSlotFallback(
+      const fallbackSlots = deterministicSlotFallback(
         input.currentMessage,
         finalNewSlots,
-        validated.mergedDraft,
+        mergedAfterInfer,
         input.knowledge,
       );
+      // Only fill missing fields; never overwrite LLM-extracted slots
+      finalNewSlots = {
+        ...finalNewSlots,
+        serviceName: finalNewSlots.serviceName ?? fallbackSlots.serviceName,
+        serviceDisplayName: finalNewSlots.serviceDisplayName ?? fallbackSlots.serviceDisplayName,
+        date: finalNewSlots.date ?? fallbackSlots.date,
+        time: finalNewSlots.time ?? fallbackSlots.time,
+        customerName: finalNewSlots.customerName ?? fallbackSlots.customerName,
+        phone: finalNewSlots.phone ?? fallbackSlots.phone,
+      };
     }
 
     // Deterministic slot rescue for CONFIRM_BOOKING with missing fields.

@@ -225,9 +225,15 @@ export class ChatService {
       phone: null,
     };
 
+    // WhatsApp auto-fill: wa_id is the sender's phone; strip "852" country prefix for HK
+    const waPhone = channel === 'WHATSAPP' && externalContactId
+      ? externalContactId.replace(/^852/, '').replace(/[^0-9]/g, '') || externalContactId
+      : null;
+
     let bookingDraftForEngine: BookingDraft = {
       ...(bookingDraft ?? emptyDraftBase),
-      phone: bookingDraft?.phone ?? extracted.phone ?? null,
+      phone: bookingDraft?.phone ?? extracted.phone ?? waPhone ?? null,
+      customerName: bookingDraft?.customerName ?? extracted.customerName ?? (channel === 'WHATSAPP' ? contactName ?? null : null),
     };
 
     if (wantsModifyCancelContext || modifyCancelFlow) {
