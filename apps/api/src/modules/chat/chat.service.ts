@@ -12,35 +12,9 @@ import { getConversationBookingState, updateBookingDraft, mergeConversationMetad
 import type { ChatMessageDto } from './dto/chat-message.dto';
 import type { PublicChatDto } from './dto/public-chat.dto';
 import { shouldEscapeStaleConfirmation } from './stale-confirmation-escape';
+import { buildAiMessageMetadata, messageContentForAiEngine } from './ai-message-metadata';
 
 const FALLBACK_REPLY = '收到你嘅訊息，我哋同事會盡快回覆你，感謝耐心等候！';
-
-/** V2: prefer full LLM JSON from metadata for engine history (preserves action). Legacy rows use plain content. */
-function messageContentForAiEngine(m: { sender: string; content: string; metadata: unknown }): string {
-  if (m.sender !== 'AI') return m.content;
-  const meta = m.metadata as Record<string, unknown> | null | undefined;
-  const raw = meta && typeof meta.rawLlmJson === 'string' ? meta.rawLlmJson.trim() : '';
-  return raw.length > 0 ? raw : m.content;
-}
-
-/** Store raw LLM JSON in Message.metadata.rawLlmJson for next-turn V2 context; fallback synthetic JSON if needed. */
-function buildAiMessageMetadata(result: AiEngineResult): Prisma.InputJsonValue | undefined {
-  const r = result as AiEngineResult & { _rawLlmJson?: string; _v2Action?: string };
-  const raw = r._rawLlmJson;
-  if (typeof raw === 'string' && raw.trim().length > 0) {
-    return { rawLlmJson: raw };
-  }
-  if (typeof r._v2Action === 'string' && result.replyText) {
-    return {
-      rawLlmJson: JSON.stringify({
-        reply: result.replyText,
-        action: r._v2Action,
-        intent: result.signals?.intents?.[0] ?? 'OTHER',
-      }),
-    };
-  }
-  return undefined;
-}
 
 @Injectable()
 export class ChatService {
