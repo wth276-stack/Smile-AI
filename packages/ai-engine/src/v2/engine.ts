@@ -725,6 +725,38 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
       );
     }
 
+    // Deterministic slot rescue for CONFIRM_BOOKING with missing fields.
+    // Before downgrading to COLLECT_BOOKING, try extracting from the user message
+    // so partial LLM newSlots (e.g. only date+time, missing customerName) get patched.
+    const mergedBeforeRescue = mergeBookingDraft(validated.mergedDraft, finalNewSlots);
+    const missingBeforeRescue = getMissingBookingSlots(mergedBeforeRescue);
+
+    if (
+      validated.action === 'CONFIRM_BOOKING' &&
+      missingBeforeRescue.length > 0
+    ) {
+      const rescueSlots = deterministicSlotFallback(
+        input.currentMessage,
+        finalNewSlots,
+        mergedBeforeRescue,
+        input.knowledge,
+      );
+      if (Object.keys(rescueSlots).some((k) => rescueSlots[k as keyof typeof rescueSlots] != null)) {
+        // Only fill missing fields; never overwrite LLM-extracted slots
+        finalNewSlots = {
+          ...finalNewSlots,
+          serviceName: finalNewSlots.serviceName ?? rescueSlots.serviceName,
+          serviceDisplayName: finalNewSlots.serviceDisplayName ?? rescueSlots.serviceDisplayName,
+          date: finalNewSlots.date ?? rescueSlots.date,
+          time: finalNewSlots.time ?? rescueSlots.time,
+          customerName: finalNewSlots.customerName ?? rescueSlots.customerName,
+          phone: finalNewSlots.phone ?? rescueSlots.phone,
+          bookingId: finalNewSlots.bookingId ?? rescueSlots.bookingId,
+        };
+        console.log('[v2/engine] CONFIRM_BOOKING rescue: patched slots from user message:', JSON.stringify(rescueSlots));
+      }
+    }
+
     const finalMergedDraft = mergeBookingDraft(validated.mergedDraft, finalNewSlots);
 
     const missingSlots = getMissingBookingSlots(finalMergedDraft);
