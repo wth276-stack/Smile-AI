@@ -52,12 +52,7 @@ function shouldSkipCase3WhenAffirmingWithoutPending(
 const MAX_HISTORY = 10;
 const API_TIMEOUT_MS = 60_000;
 
-import {
-  addCalendarDaysHKT,
-  formatDateHKYmd,
-  getHKTJsWeekday,
-  getHKTToday,
-} from './date-utils';
+import { formatDateHKYmd, getHKTJsWeekday, getHKTToday } from './date-utils';
 
 export { getHKTToday, formatDateHKYmd };
 
@@ -71,41 +66,6 @@ const EMPTY_DRAFT: BookingDraft = {
   customerName: null,
   phone: null,
 };
-
-function buildCalendarRef(today?: Date): string {
-  const dayLabels = ['日', '一', '二', '三', '四', '五', '六'];
-  const baseYmd = formatDateHKYmd(today ?? getHKTToday());
-
-  function fmtFromYmd(ymd: string): string {
-    const [, m, day] = ymd.split('-').map(Number);
-    const noon = new Date(`${ymd}T12:00:00+08:00`);
-    const dow = getHKTJsWeekday(noon);
-    return `${m}月${day}日（星期${dayLabels[dow]}）`;
-  }
-  function fmtShortFromYmd(ymd: string): string {
-    const [, m, day] = ymd.split('-').map(Number);
-    return `${m}月${day}日`;
-  }
-
-  const lines: string[] = [];
-  lines.push(`今日 = ${fmtFromYmd(baseYmd)}`);
-  lines.push(`聽日 = ${fmtFromYmd(addCalendarDaysHKT(baseYmd, 1))}`);
-
-  const count = new Map<number, number>();
-  for (let i = 2; count.size < 7 || ![...count.values()].every((v) => v >= 2); i++) {
-    if (i > 21) break;
-    const ymd = addCalendarDaysHKT(baseYmd, i);
-    const noon = new Date(`${ymd}T12:00:00+08:00`);
-    const dow = getHKTJsWeekday(noon);
-    const c = count.get(dow) ?? 0;
-    if (c >= 2) continue;
-    count.set(dow, c + 1);
-    const prefix = c === 0 ? '星期' : '下星期';
-    lines.push(`${prefix}${dayLabels[dow]} = ${fmtShortFromYmd(ymd)}`);
-  }
-
-  return lines.join('\n');
-}
 
 function mapActionToLegacy(action: string): AiAction {
   switch (action) {
@@ -587,18 +547,6 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     }
   }
 }
-    // 注入日曆參考到 system prompt
-    if (messages.length > 0 && messages[0].role === 'system') {
-      const content = messages[0].content as string;
-      const calendar = buildCalendarRef();
-      const dateLineRegex = /(今日日期：[^\n]+\n)/;
-      if (dateLineRegex.test(content)) {
-        messages[0].content = content.replace(dateLineRegex, `$1\n${calendar}\n`);
-      } else {
-        messages[0].content = calendar + '\n\n' + content;
-      }
-    }
-
     if (input.knowledge.length > 0 && messages.length > 0 && messages[0].role === 'system') {
       const systemPrompt = String(messages[0].content ?? '');
       const hasAnyKbChunk = input.knowledge.some((k) => {

@@ -1,9 +1,10 @@
 import type { PromptContext, BookingDraft, KnowledgeChunk } from './types';
-import { formatDateHKYmd, getHKTToday } from './date-utils';
+import { formatDateHKYmd, getHKTJsWeekday, getHKTToday } from './date-utils';
 
 const FAQ_MAX_ITEMS = 8;
-const FAQ_ANSWER_MAX = 400;
+const FAQ_ANSWER_MAX = 220;
 const PACKAGE_BLOCK_MAX = 1200;
+const MAX_TITLE_LEN = 48;
 
 function trimText(text: string, max: number): string {
   const t = text.replace(/\s+/g, ' ').trim();
@@ -11,16 +12,62 @@ function trimText(text: string, max: number): string {
   return `${t.slice(0, max - 1)}…`;
 }
 
-/** Verbatim FAQ — old 2×20char truncation dropped facts (e.g. 12–18 個月). */
-function formatFaqBlock(items: Array<{ question: string; answer: string }>): string {
-  return items
-    .slice(0, FAQ_MAX_ITEMS)
-    .map((f, i) => {
-      const q = f.question.replace(/^Q[：:\s]*/i, '').trim();
-      const a = f.answer.replace(/^A[：:\s]*/i, '').trim();
-      return `Q${i + 1}: ${trimText(q, 200)}\nA${i + 1}: ${trimText(a, FAQ_ANSWER_MAX)}`;
-    })
-    .join('\n');
+/** Short key for compact faq.<key> lines (deduped per chunk). */
+function faqKeyFromQuestion(question: string, used: Set<string>): string {
+  const q = question.replace(/^Q[：:\s]*/i, '').trim();
+  let base = 'item';
+  if (/痛|感覺|麻醉|唔舒服/.test(q)) base = 'pain';
+  else if (/恢復|復原|泛紅|紅|腫|恢復期/.test(q)) base = 'recovery';
+  else if (/維持|幾耐|多久|持續|個月/.test(q)) base = 'duration';
+  else if (/價|費用|錢|收費/.test(q)) base = 'price';
+  else if (/副作用|風險|安全/.test(q)) base = 'safety';
+  else {
+    const slug = q
+      .slice(0, 20)
+      .replace(/\s+/g, '_')
+      .replace(/[^\w\u4e00-\u9fff]/g, '');
+    if (slug.length >= 2) base = slug;
+  }
+  let key = base;
+  let n = 2;
+  while (used.has(key)) {
+    key = `${base}_${n}`;
+    n += 1;
+  }
+  used.add(key);
+  return key;
+}
+
+function formatFaqCompact(
+  items: Array<{ question: string; answer: string }>,
+  effectDur: string | null,
+): string[] {
+  const used = new Set<string>();
+  const lines: string[] = [];
+  for (const f of items.slice(0, FAQ_MAX_ITEMS)) {
+    const a = f.answer.replace(/^A[：:\s]*/i, '').trim();
+    const key = faqKeyFromQuestion(f.question, used);
+    if (
+      effectDur &&
+      key === 'duration' &&
+      normalizeMaintenanceSig(a) &&
+      normalizeMaintenanceSig(effectDur) &&
+      normalizeMaintenanceSig(a) === normalizeMaintenanceSig(effectDur)
+    ) {
+      continue;
+    }
+    lines.push(`faq.${key}: ${trimText(a, FAQ_ANSWER_MAX)}`);
+  }
+  return lines;
+}
+
+/** Normalise maintenance window for conservative dedupe (digits + 個月), null if no clear pattern. */
+function normalizeMaintenanceSig(s: string | null | undefined): string | null {
+  if (!s) return null;
+  const t = s.replace(/\s+/g, '');
+  const m = t.match(/(\d+)\s*[-–]\s*(\d+)\s*個月/);
+  if (m) return `${m[1]}-${m[2]}月`;
+  return null;
 }
 
 /** Effect duration from FAQ / 功效 (not 療程時長 session length). */
@@ -55,12 +102,37 @@ function isLikelyPackageDoc(c: KnowledgeChunk): boolean {
 /** Preserve 包含 lists for 「包含咩」 (price-only summary hid these). */
 function extractPackageIncludeBlock(content: string): string {
   const m1 = content.match(/【包含項目】[\s\S]*?(?=\n\n【|\n\n適合人群|\n\n注意：|\n\n有效期：|\n\n常見問題|$)/);
-  if (m1) return trimText(m1[0].trim(), PACKAGE_BLOCK_MAX);
+  if (m1) return trimBlockPreserveLines(m1[0], PACKAGE_BLOCK_MAX);
   const m2 = content.match(
     /包含：\s*\n([\s\S]*?)(?=\n\n適合人群|\n\n注意：|\n\n有效期：|\n\n常見問題|$)/,
   );
-  if (m2) return trimText(`包含：\n${m2[1].trim()}`, PACKAGE_BLOCK_MAX);
+  if (m2) return trimBlockPreserveLines(`包含：\n${m2[1].trim()}`, PACKAGE_BLOCK_MAX);
   return '';
+}
+
+/** Bullet lines from package include block (compact). */
+function compactIncludeBlock(raw: string): string[] {
+  const lines = raw.split('\n').map((l) => l.replace(/^[-•\s]+/, '').trim()).filter(Boolean);
+  const out: string[] = [];
+  for (const line of lines) {
+    if (/^【|^包含：?$/u.test(line)) continue;
+    out.push(`- ${trimText(line, 120)}`);
+  }
+  return out.slice(0, 24);
+}
+
+function normPrice(p: string | null | undefined): string {
+  return String(p ?? '')
+    .replace(/^HKD\s*/i, '')
+    .replace(/^HK\$\s*/i, '')
+    .trim();
+}
+
+/** Trim length without collapsing newlines (KB include blocks need line breaks). */
+function trimBlockPreserveLines(text: string, max: number): string {
+  const t = text.replace(/\r\n/g, '\n').trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
 }
 
 export function formatKnowledgeChunks(
@@ -77,49 +149,94 @@ export function formatKnowledgeChunks(
     return trimText(clause, max);
   };
 
+  const seenLines = new Set<string>();
+
+  const pushUniq = (lines: string[], line: string) => {
+    const k = line.replace(/\s+/g, ' ');
+    if (seenLines.has(k)) return;
+    seenLines.add(k);
+    lines.push(line);
+  };
+
   return chunks
     .map((c) => {
+      seenLines.clear();
+
       if (c.title === '營業時間') {
-        return `【${c.title}】\n${c.content}`;
+        const lines: string[] = ['[GLOBAL]', `type: hours`];
+        const head = trimText(c.content.replace(/\s+/g, ' '), 600);
+        pushUniq(lines, `hours: ${head}`);
+        return lines.join('\n');
       }
 
       const hasStructure =
-        c.price || c.duration || c.effect || c.suitable || c.faqItems?.length;
+        c.price ||
+        c.duration ||
+        c.effect ||
+        c.suitable ||
+        c.unsuitable ||
+        c.faqItems?.length;
       if (!hasStructure) {
-        return `## ${c.title}\n${c.content}`;
+        return `[DOC] ${trimText(c.title, MAX_TITLE_LEN)}\n${trimText(c.content, 2500)}`;
       }
 
-      const pricePart = c.price ? `$${String(c.price).replace(/^HK\$?/i, '').trim()}` : '$-';
-      const discountPart = c.discountPrice
-        ? ` → $${String(c.discountPrice).replace(/^HK\$?/i, '').trim()}`
-        : '';
-      const sessionPart = c.duration ? c.duration.replace(/\s*分鐘$/, ' mins') : '-';
-      const suitablePart = firstClause(
-        c.suitable ?? c.unsuitable ?? options.defaultSuitableFor,
-        28,
-      );
-      const cautionPart = firstClause(c.precaution ?? options.defaultCaution, 28);
-      const benefits = firstClause(c.effect ?? c.content.split('\n')[0], 80);
+      const title = trimText(c.title, MAX_TITLE_LEN);
+      const lines: string[] = [`[SVC] ${title}`];
+
+      if (c.price) pushUniq(lines, `price: $${normPrice(c.price)}`);
+      if (c.discountPrice) pushUniq(lines, `discount: $${normPrice(c.discountPrice)}`);
+
+      if (c.duration) {
+        const sessionPart = c.duration.replace(/\s*分鐘$/, 'm').replace(/\s+/g, '');
+        pushUniq(lines, `duration: ${trimText(sessionPart, 40)}`);
+      }
 
       const effectDur = extractKbEffectDurationLine(c);
-      const faqBlock = c.faqItems?.length
-        ? formatFaqBlock(c.faqItems)
-        : 'N/A';
+      let benefits = firstClause(c.effect ?? c.content.split('\n')[0], 160);
+      const effSig = normalizeMaintenanceSig(benefits);
+      const durSig = normalizeMaintenanceSig(effectDur);
+      if (
+        benefits &&
+        effectDur &&
+        effSig &&
+        durSig &&
+        effSig === durSig &&
+        !benefits.includes('\n')
+      ) {
+        benefits = '';
+      }
+      if (benefits) pushUniq(lines, `effect: ${benefits}`);
+      if (effectDur) pushUniq(lines, `effect_duration: ${effectDur}`);
 
-      const lines: string[] = [
-        `## ${trimText(c.title, 24)}`,
-        `Price: ${pricePart}${discountPart} | Session length (單次療程時間): ${sessionPart}`,
-        ...(effectDur ? [`KB effect duration (功效/FAQ，唔係療程時長): ${effectDur}`] : []),
-        `Benefits (excerpt): ${benefits}`,
-        `Suitable for: ${suitablePart}`,
-        `Caution: ${cautionPart}`,
-        `FAQ (verbatim — use for 維持幾耐/價錢/副作用等):\n${faqBlock}`,
-      ];
+      if (c.suitable) {
+        const suitablePart = firstClause(c.suitable, 140);
+        if (suitablePart) pushUniq(lines, `suitable_for: ${suitablePart}`);
+      }
+      if (c.unsuitable) {
+        const notPart = firstClause(c.unsuitable, 140);
+        if (notPart) pushUniq(lines, `not_suitable: ${notPart}`);
+      }
+      if (!c.suitable && !c.unsuitable) {
+        const defSuit = firstClause(options.defaultSuitableFor, 140);
+        if (defSuit) pushUniq(lines, `suitable_for: ${defSuit}`);
+      }
+
+      const cautionPart = firstClause(c.precaution ?? options.defaultCaution, 120);
+      if (cautionPart) pushUniq(lines, `caution: ${cautionPart}`);
+
+      if (c.faqItems?.length) {
+        for (const fq of formatFaqCompact(c.faqItems, effectDur)) {
+          pushUniq(lines, fq);
+        }
+      }
 
       if (isLikelyPackageDoc(c)) {
         const inc = extractPackageIncludeBlock(c.content);
         if (inc) {
-          lines.push(`Package includes (原文 — 問「包含咩」必列此段):\n${inc}`);
+          pushUniq(lines, 'includes:');
+          for (const row of compactIncludeBlock(inc)) {
+            pushUniq(lines, row);
+          }
         }
       }
 
@@ -217,9 +334,10 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     : ctx.contactName
       ? `Contact name on file: ${ctx.contactName} (may be from a previous booking — confirm with the customer if starting a new booking).`
       : '';
-  const now = getHKTToday();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const dayOfWeek = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
+  const today = getHKTToday();
+  const todayStr = formatDateHKYmd(today);
+  const wd = getHKTJsWeekday(today);
+  const wdEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][wd];
 
   const personaExtras = [
     tp?.assistantRole ? `- Style: ${tp.assistantRole}` : '',
@@ -229,50 +347,48 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     .join('\n');
 
   return `You are a WhatsApp sales assistant for ${businessName} (${businessType}).
-Default language: Cantonese/Traditional Chinese. 今日日期：${todayStr}（星期${dayOfWeek}）${greeting ? `\n${greeting}` : ''}
+Default language: Cantonese/Traditional Chinese.
+Today: ${todayStr} (${wdEn})${greeting ? `\n${greeting}` : ''}
 
 ## Booking State
 ${draft}${bookingsSection}
 
 ## Knowledge Base
 ${kb}
-知識庫規則：回答服務/價格/FAQ 必須以上述知識庫為唯一依據。若無相關內容，答「我暫時未有相關資料，請聯絡我們了解更多。」嚴禁自行捏造。
-服務配對：客人提及服務名（含錯字/簡稱），配對知識庫最近嘅服務。80%+ 確信就直接用，唔好列晒所有服務。
-精準事實（禁止用一般醫美常識覆蓋 KB）：「療程時長／Session length」= 單次療程所需時間；「效果維持幾耐／維持幾耐」= 必須用 FAQ 或「KB effect duration」行嘅月數（如 12–18 個月），唔好同療程時長混淆。
-套餐問題：問「包含咩／有咩內容／包咩」→ 必須先列出「Package includes」段嘅項目，再補價錢；唔好只答價錢。
+
+## Rules
+Role: WhatsApp sales assistant for ${businessName}
+Lang: zh-HK traditional
+- use_kb_only_for_service_price_faq; if missing in KB say 我暫時未有相關資料，請聯絡我們了解更多 — no fabrication
+- match_user_service_to_nearest_kb_title (typos/short names OK); if ~80%+ confident use that service, do not list entire catalog
+- duration field = single-session length; effect_duration / faq.duration = maintenance months — never swap with session length
+- package 包含/有咩內容: list includes lines first, then price — not price-only
+- ask_max_1_missing_booking_field unless user gives several at once
+- confirm_only_when_required_booking_fields_complete (service/date/time/name/phone)
+- after CONFIRM summary, user affirms → SUBMIT_BOOKING (new) | MODIFY_BOOKING | CANCEL_BOOKING (not REPLY)
+- user rejects/wants changes → COLLECT_BOOKING, ask which field; do not repeat full summary
+- modify/cancel: phone lookup; if multiple bookings list them; confirm change details before finalize
 
 ## Date/Time Parsing
-用上面日曆參考表嚟對應「聽日/星期X/下星期X」→ 實際 YYYY-MM-DD，唔好自己推算。
-"X號"=日期(YYYY-MM-DD) "X點"=時間(HH:mm)。兩者獨立，絕對唔可以對調。
-例：9號11點 → date:04-09, time:11:00 ✓（唔係 date:04-11, time:09:00）
-日期+時間同時出現→同時放入 newSlots。
+- Map 聽日/星期X/下星期X / literals to YYYY-MM-DD using Today (${todayStr}) and Hong Kong calendar; if user message includes [系統日期解析] hints, use those dates exactly
+- X號 = date (YYYY-MM-DD); X點 = time (HH:mm) — never swap (e.g. 9號11點 → date 09 + time 11:00, not reversed)
+- If date+time in one utterance, put both in newSlots
 
 ## Actions
-- REPLY — 一般回覆/FAQ/問候
-- COLLECT_BOOKING — 收集或確認預約資料（service/date/time/name/phone）
-- CONFIRM_BOOKING — 5 格全齊，出 summary 問客人確認
-- SUBMIT_BOOKING — 客人確認新預約→你 finalize（唯一會真正建立預約嘅 action）
-- MODIFY_BOOKING — 客人確認改期（必須有 bookingId）
-- CANCEL_BOOKING — 客人確認取消（必須有 bookingId）
-- HANDOFF — 需要真人介入
-
-### Confirmation Rules
-1. 唔好用確認語句（確認嗎？OK嗎？）直到 5 格全 ✓。
-2. 你出咗 CONFIRM summary 後，客人回 好/OK/確認 → action 必須係 SUBMIT_BOOKING（唔係 REPLY）。
-3. 改期/取消 flow：客人確認修改 → action 必須係 MODIFY_BOOKING 或 CANCEL_BOOKING（唔係 SUBMIT_BOOKING）。
-4. 客人拒絕確認（唔啱/想改/wrong）→ action=COLLECT_BOOKING，問邊個欄位要改，唔好重複成份 summary。
-
-## Booking Flow
-- 自然對話收集，每次問一個欄位；客人一次畀多個就照收
-- 改期/取消：需要電話 lookup；多個預約就列出問邊個
-- 改期確認前必先 confirm change details
+- REPLY — chat / FAQ / greeting
+- COLLECT_BOOKING — collect or clarify booking fields
+- CONFIRM_BOOKING — all required fields filled → show summary for confirmation only
+- SUBMIT_BOOKING — user confirmed new booking → only action that creates booking
+- MODIFY_BOOKING — user confirmed reschedule (needs bookingId)
+- CANCEL_BOOKING — user confirmed cancel (needs bookingId)
+- HANDOFF — human needed
 
 ## Output
-Single JSON, no code fences, <250 tokens.
+Single JSON object only, no markdown fences, keep reply concise.
 {"reply":"…","intent":"GREETING|FAQ|BOOKING_REQUEST|BOOKING_CHANGE|BOOKING_CANCEL|PRICE_INQUIRY|PRODUCT_INQUIRY|AVAILABILITY_CHECK|CONTACT_INFO|OTHER","action":"REPLY|COLLECT_BOOKING|CONFIRM_BOOKING|SUBMIT_BOOKING|MODIFY_BOOKING|CANCEL_BOOKING|HANDOFF","newSlots":{"bookingId":"…","serviceName":"…","serviceDisplayName":"…","date":"YYYY-MM-DD","time":"HH:mm","customerName":"…","phone":"…"}}
-newSlots 規則：只放本輪**新**收集到嘅欄位（Booking State 已 ✓ 嘅唔好重複）。✗ 但你知道嘅就必須填。
+newSlots: only fields newly collected this turn (omit fields already ✓ in Booking State); fill any known ✗ slots you can infer
 
-Voice: friendly, professional, concise; 1-2 emoji max.${personaExtras ? ` ${personaExtras}` : ''}`;
+Voice: friendly, professional, concise; 1-2 emoji max.${personaExtras ? `\n${personaExtras}` : ''}`;
 }
 
 export function buildMessages(
