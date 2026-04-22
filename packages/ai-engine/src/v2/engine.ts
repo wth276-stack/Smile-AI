@@ -31,6 +31,16 @@ import { matchService } from '../service-matcher';
 
 const FALLBACK_REPLY = '抱歉，系統暫時遇到問題，請稍後再試 🙏';
 
+function isV2DebugEnabled(): boolean {
+  const v = process.env.AI_ENGINE_V2_DEBUG;
+  return v === '1' || v === 'true';
+}
+function debugLog(...args: unknown[]): void {
+  if (isV2DebugEnabled()) {
+    console.log(...(args as [unknown, ...unknown[]]));
+  }
+}
+
 /**
  * Second-affirm / stray path: after CREATE (or when confirmationPending is false), the model may
  * return REPLY_ONLY / REPLY / CONFIRM_BOOKING instead of SUBMIT_BOOKING — duplicate-affirm guard
@@ -319,7 +329,7 @@ function inferMissingService(
   const result = matchService(searchTexts.join(' '), catalog);
   if ((result.type === 'exact' || result.type === 'close') && result.matches.length > 0) {
     const best = result.matches[0];
-    console.log(`[v2/engine] Auto-inferred missing serviceName: ${best.service.displayName}`);
+    debugLog(`[v2/engine] Auto-inferred missing serviceName: ${best.service.displayName}`);
     return {
       ...newSlots,
       serviceName: best.service.code,
@@ -366,7 +376,7 @@ function deterministicSlotFallback(
         patched.serviceName = best.service.code;
         patched.serviceDisplayName = best.service.displayName;
         changed = true;
-        console.log(`[v2/engine] Fallback: extracted service "${best.service.displayName}" from user message`);
+        debugLog(`[v2/engine] Fallback: extracted service "${best.service.displayName}" from user message`);
       }
     }
   }
@@ -375,12 +385,12 @@ function deterministicSlotFallback(
   if (!mergedDraft.date && extracted.date) {
     patched.date = extracted.date;
     changed = true;
-    console.log(`[v2/engine] Fallback: extracted date "${extracted.date}" from user message`);
+    debugLog(`[v2/engine] Fallback: extracted date "${extracted.date}" from user message`);
   }
   if (!mergedDraft.time && extracted.time) {
     patched.time = extracted.time;
     changed = true;
-    console.log(`[v2/engine] Fallback: extracted time "${extracted.time}" from user message`);
+    debugLog(`[v2/engine] Fallback: extracted time "${extracted.time}" from user message`);
   }
   if (!mergedDraft.customerName && extracted.customerName) {
     patched.customerName = extracted.customerName;
@@ -392,7 +402,7 @@ function deterministicSlotFallback(
   }
 
   if (changed) {
-    console.log('[v2/engine] Fallback slots applied:', JSON.stringify(patched));
+    debugLog('[v2/engine] Fallback slots applied:', JSON.stringify(patched));
   }
   return patched;
 }
@@ -427,8 +437,8 @@ function extractFromTruncatedJson(raw: string): LLMOutput | null {
   if (nameMatch) slots.customerName = nameMatch[1];
   if (phoneMatch) slots.phone = phoneMatch[1];
 
-  console.log('[v2/engine] Regex extracted reply:', extractedReply);
-  console.log('[v2/engine] Regex extracted slots:', JSON.stringify(slots));
+  debugLog('[v2/engine] Regex extracted reply:', extractedReply);
+  debugLog('[v2/engine] Regex extracted slots:', JSON.stringify(slots));
 
   return {
     thinking: '',
@@ -569,11 +579,11 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
           break;
         }
       }
-      console.log('[v2/engine] Injected date hint into user message:', resolvedDates);
+      debugLog('[v2/engine] Injected date hint into user message:', resolvedDates);
     }
 
-    console.log(`[v2/engine] Sending ${messages.length} messages to OpenAI (trimmed to last ${MAX_HISTORY})`);
-    console.log('[v2/engine] Messages payload:', JSON.stringify(messages, null, 2));
+    debugLog(`[v2/engine] Sending ${messages.length} messages to OpenAI (trimmed to last ${MAX_HISTORY})`);
+    debugLog('[v2/engine] Messages payload:', JSON.stringify(messages, null, 2));
 
     const client = new OpenAI({ timeout: API_TIMEOUT_MS, maxRetries: 0 });
     const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
@@ -582,7 +592,7 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     let response: OpenAI.Chat.Completions.ChatCompletion | undefined;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        console.log(`[v2/engine] OpenAI request attempt ${attempt + 1} with timeout ${API_TIMEOUT_MS / 1000}s`);
+        debugLog(`[v2/engine] OpenAI request attempt ${attempt + 1} with timeout ${API_TIMEOUT_MS / 1000}s`);
         response = await client.chat.completions.create({
           model,
           messages,
@@ -597,7 +607,7 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
           err instanceof APIConnectionError;
         if (!isRetryable || attempt === MAX_RETRIES) throw err;
         const delay = 1000 * Math.pow(2, attempt);
-        console.log('[v2/engine] Retry attempt', attempt + 1, 'after error:', (err as Error).message, `(waiting ${delay}ms)`);
+        debugLog('[v2/engine] Retry attempt', attempt + 1, 'after error:', (err as Error).message, `(waiting ${delay}ms)`);
         await new Promise((r) => setTimeout(r, delay));
       }
     }
@@ -606,11 +616,11 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     const finishReason = response.choices[0]?.finish_reason;
     const content = response.choices[0]?.message?.content;
 
-    console.log('[v2/engine] Finish reason:', finishReason);
-    console.log('[v2/engine] Content type:', typeof content);
-    console.log('[v2/engine] Content length:', content?.length);
-    console.log('[v2/engine] Content preview:', typeof content === 'string' ? content.substring(0, 500) : String(content));
-    console.log('[v2/engine] Usage:', JSON.stringify(response.usage));
+    debugLog('[v2/engine] Finish reason:', finishReason);
+    debugLog('[v2/engine] Content type:', typeof content);
+    debugLog('[v2/engine] Content length:', content?.length);
+    debugLog('[v2/engine] Content preview:', typeof content === 'string' ? content.substring(0, 500) : String(content));
+    debugLog('[v2/engine] Usage:', JSON.stringify(response.usage));
 
     if (!content || typeof content !== 'string' || content.trim().length === 0) {
       console.error('[v2/engine] Empty or invalid response from OpenAI. Type:', typeof content, 'Value:', JSON.stringify(content));
@@ -618,7 +628,7 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     }
 
     const rawText = content.trim();
-    console.log('[v2/engine] Raw LLM response:', rawText);
+    debugLog('[v2/engine] Raw LLM response:', rawText);
 
     let parsed: LLMOutput;
     try {
@@ -724,7 +734,7 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
           phone: finalNewSlots.phone ?? rescueSlots.phone,
           bookingId: finalNewSlots.bookingId ?? rescueSlots.bookingId,
         };
-        console.log('[v2/engine] CONFIRM_BOOKING rescue: patched slots from user message:', JSON.stringify(rescueSlots));
+        debugLog('[v2/engine] CONFIRM_BOOKING rescue: patched slots from user message:', JSON.stringify(rescueSlots));
       }
     }
 
@@ -756,7 +766,7 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
       fixedReply += `請問你嘅${askFor}係？`;
 
       validated.validatedReply = fixedReply;
-      console.log('[v2/engine] Reply fixed for missing slots:', fixedReply);
+      debugLog('[v2/engine] Reply fixed for missing slots:', fixedReply);
     }
 
     finalAction = validated.action as string;

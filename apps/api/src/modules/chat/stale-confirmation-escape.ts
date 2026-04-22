@@ -1,34 +1,10 @@
 /**
  * Stale booking-confirmation escape (FAQ / info queries while confirmationPending).
- * Keep isConfirmationMessage in sync with packages/ai-engine/src/v2/validator.ts (isConfirmationMessage).
+ * isConfirmationMessage is the single source of truth from @ats/ai-engine (v2/validator).
  */
+import { isConfirmationMessage } from '@ats/ai-engine';
 
-/** Mirrors validator isConfirmationMessage — do not drift. */
-export function isConfirmationMessage(text: string): boolean {
-  const t = text.trim().toLowerCase();
-  if (!t) return false;
-
-  if (/但|不過|唔係|不是|改|取消|等等|唔好|算|唔要|等一等|慢|唔啱/.test(t)) return false;
-
-  const exactAffirm = [
-    '確認', '好', 'ok', 'yes', '係', '冇問題', '可以', '同意', 'y',
-    '得', '啱', '好嘅', '好呀', '好啊', '無問題', '就咁', '搞掂',
-    'sure', 'confirm', 'yeah', 'yep', 'yup', '確定', '冇錯',
-    '對', '啱嘅', '正確', '係呀', '好的', '是', '是的',
-    'ok!', 'ok！', '👍', '👌',
-  ];
-  if (exactAffirm.some((a) => t === a)) return true;
-
-  if (t.length <= 10) {
-    const partialAffirm = [
-      '確認', '好', '可以', '冇問題', '同意', '得', '搞掂', '確定',
-      '無問題', 'ok', 'yes', '啱',
-    ];
-    if (partialAffirm.some((a) => t.includes(a))) return true;
-  }
-
-  return false;
-}
+export { isConfirmationMessage };
 
 const PRICE_OR_INFO_REDIRECT = /幾錢|價錢|價格|how much|收費|想知道.*價|想問.*價|只係想知|只想問|只係想了解|營業|地址|幾耐|副作用|係咩|有咩|邊度/i;
 

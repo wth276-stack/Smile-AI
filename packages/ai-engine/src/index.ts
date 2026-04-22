@@ -5,7 +5,9 @@ import { runAiEngineV2 } from './v2/engine';
 
 export async function runAiEngine(input: AiEngineInput): Promise<AiEngineResult> {
   const useV2 = process.env.USE_V2_ENGINE === '1' || process.env.USE_V2_ENGINE === 'true';
-  console.log(`[AI-ENGINE] Using ${useV2 ? 'V2' : 'V1'} engine`);
+  if (process.env.AI_ENGINE_V2_DEBUG === '1' || process.env.AI_ENGINE_V2_DEBUG === 'true') {
+    console.log(`[AI-ENGINE] Using ${useV2 ? 'V2' : 'V1'} engine`);
+  }
   return useV2 ? runAiEngineV2(input) : runAiEngineV1(input);
 }
 
@@ -47,6 +49,7 @@ export { verifyLlmValidationRegression } from './llm-validate';
 export { verifyLlmMergeRegression } from './llm-regression';
 export { verifyLlmSemanticRegression } from './llm-semantic-check';
 export { resolveAiEngineMode, shouldAttemptLlmPlanner, type AiEngineMode } from './llm-config';
+export { isConfirmationMessage } from './v2/validator';
 export { useLlmFirstPrototype, useThinCoreV1 } from './llm-config';
 export { runThinCoreV1 } from './thin-core-v1/thin-run';
 export type { LlmPlannerOutput, LlmPlannerIntent } from './llm-contract';
