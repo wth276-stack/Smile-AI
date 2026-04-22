@@ -27,7 +27,7 @@ import {
   extractSlots,
   getMissingBookingSlots,
 } from '../booking-state';
-import { matchService } from '../service-matcher';
+import { buildServiceCatalog, buildServiceTaxonomy, detectServiceSwitch, matchService } from '../service-matcher';
 
 const FALLBACK_REPLY = '抱歉，系統暫時遇到問題，請稍後再試 🙏';
 
@@ -739,6 +739,34 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     }
 
     const finalMergedDraft = mergeBookingDraft(validated.mergedDraft, finalNewSlots);
+
+    // ── Explicit override: ensure finalNewSlots.serviceName writes through ──
+    // mergeBookingDraft uses ?? which may not override when orNull() treats
+    // some LLM outputs as null. Write back explicitly so the draft always
+    // reflects the LLM's extracted service when one exists.
+    if (finalNewSlots.serviceName) {
+      finalMergedDraft.serviceName = finalNewSlots.serviceName;
+      finalMergedDraft.serviceDisplayName =
+        finalNewSlots.serviceDisplayName ?? finalNewSlots.serviceName;
+    }
+
+    // ── Service switch detection: clear or replace serviceName when user switches ──
+    const switchCatalog = buildServiceCatalog(input.knowledge);
+    const switchTaxonomy = buildServiceTaxonomy(switchCatalog);
+    const serviceSwitch = detectServiceSwitch(
+      input.currentMessage, finalMergedDraft, finalNewSlots, switchCatalog, switchTaxonomy,
+    );
+    if (serviceSwitch) {
+      if (serviceSwitch.type === 'clear') {
+        finalMergedDraft.serviceName = null;
+        finalMergedDraft.serviceDisplayName = null;
+        console.log('[v2/engine] Service switch: cleared serviceName (category-level reference)');
+      } else {
+        finalMergedDraft.serviceName = serviceSwitch.serviceName!;
+        finalMergedDraft.serviceDisplayName = serviceSwitch.serviceDisplayName!;
+        console.log(`[v2/engine] Service switch: replaced with ${serviceSwitch.serviceDisplayName}`);
+      }
+    }
 
     const missingSlots = getMissingBookingSlots(finalMergedDraft);
 

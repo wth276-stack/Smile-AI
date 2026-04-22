@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import type { BookingDraft } from '../types';
+import type { BookingDraft, KnowledgeChunk } from '../types';
 import { mergeBookingDraft, validateOutput } from './validator';
 import { getMissingBookingSlots, bookingDraftHasAllRequiredSlots } from '../booking-state';
+import { buildServiceCatalog, buildServiceTaxonomy, detectServiceSwitch } from '../service-matcher';
 
 // ── Test the core logic flows without OpenAI dependency ──
 
@@ -189,6 +190,24 @@ describe('WhatsApp booking flow regression', () => {
       expect(result.validationIssues).toContain('Override: REPLY → CONFIRM_BOOKING (full draft + reply is confirmation summary)');
     });
 
+    it('REPLY + full draft + non-beauty confirmation summary (服務 + slots) → coerced to CONFIRM_BOOKING', () => {
+      const result = validateOutput(
+        {
+          replyText:
+            '以下是預約詳情：\n- 服務：常規檢查\n- 日期：2026-04-23\n- 時間：15:00\n- 客戶姓名：Yuki\n- 電話：64991498\n\n請確認以上資料是否正確！',
+          intents: ['BOOKING_REQUEST'],
+          newSlots: {},
+          action: 'REPLY',
+        },
+        {
+          currentDraft: FULL_DRAFT,
+          knowledgeChunks: kbChunks,
+          confirmationPending: false,
+        },
+      );
+      expect(result.action).toBe('CONFIRM_BOOKING');
+    });
+
     it('REPLY + full draft + 請確認 phrase → coerced to CONFIRM_BOOKING', () => {
       const result = validateOutput(
         {
@@ -265,6 +284,153 @@ describe('WhatsApp booking flow regression', () => {
 
       // Not all slots filled → should NOT coerce to CONFIRM_BOOKING
       expect(result.action).toBe('REPLY');
+    });
+  });
+
+  describe('Service switch detection', () => {
+    // Catalog with Facial family (3 services) and unique HIFU
+    const switchKB: KnowledgeChunk[] = [
+      {
+        documentId: 'hifu',
+        title: 'HIFU 高強度聚焦超聲波',
+        content: 'HIFU 高強度聚焦超聲波\n正價：$6980\n試做價：$4980',
+        score: 1,
+      },
+      {
+        documentId: 'deep-facial',
+        title: '深層清潔 Facial',
+        content: '深層清潔 Facial\nHKD 480',
+        score: 1,
+      },
+      {
+        documentId: 'hydrate-facial',
+        title: '補濕亮肌 Facial',
+        content: '補濕亮肌 Facial\nHKD 580',
+        score: 1,
+      },
+      {
+        documentId: 'whiten-facial',
+        title: '美白嫩膚 Facial',
+        content: '美白嫩膚 Facial\nHKD 680',
+        score: 1,
+      },
+    ];
+
+    const catalog = buildServiceCatalog(switchKB);
+    const taxonomy = buildServiceTaxonomy(catalog);
+
+    const hifuDraft: BookingDraft = {
+      bookingId: null, mode: null,
+      serviceName: 'HIFU 高強度聚焦超聲波',
+      serviceDisplayName: 'HIFU 高強度聚焦超聲波',
+      date: '2026-04-23', time: '16:00',
+      customerName: 'Yuki', phone: '64991498',
+    };
+
+    const facialDraft: BookingDraft = {
+      bookingId: null, mode: null,
+      serviceName: '深層清潔 Facial',
+      serviceDisplayName: '深層清潔 Facial',
+      date: null, time: null, customerName: null, phone: null,
+    };
+
+    it('generic family reference → clear (user says "FACIAL" while drafting HIFU)', () => {
+      const result = detectServiceSwitch(
+        '我想預約FACIAL', hifuDraft, {}, catalog, taxonomy,
+      );
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe('clear');
+    });
+
+    it('specific item → replace (user says "深層清潔 Facial" while drafting HIFU)', () => {
+      const result = detectServiceSwitch(
+        '我想做深層清潔 Facial', hifuDraft, {}, catalog, taxonomy,
+      );
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe('replace');
+      expect(result!.serviceDisplayName).toBe('深層清潔 Facial');
+    });
+
+    it('unique service → replace (user says "HIFU" while drafting Facial)', () => {
+      const result = detectServiceSwitch(
+        '唔係，我想做HIFU', facialDraft, {}, catalog, taxonomy,
+      );
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe('replace');
+      expect(result!.serviceDisplayName).toBe('HIFU 高強度聚焦超聲波');
+    });
+
+    it('same service → null (user asks "HIFU幾多錢" while drafting HIFU)', () => {
+      const result = detectServiceSwitch(
+        'HIFU幾多錢', hifuDraft, {}, catalog, taxonomy,
+      );
+      expect(result).toBeNull();
+    });
+
+    it('no service mention → null (user says "你好")', () => {
+      const result = detectServiceSwitch(
+        '你好', hifuDraft, {}, catalog, taxonomy,
+      );
+      expect(result).toBeNull();
+    });
+
+    it('LLM extracted service + user category text → clear (override LLM pick)', () => {
+      // LLM picked "深層清潔 Facial" but user only said "FACIAL" (category)
+      const newSlots: Partial<BookingDraft> = {
+        serviceName: '深層清潔 Facial',
+        serviceDisplayName: '深層清潔 Facial',
+      };
+      const result = detectServiceSwitch(
+        '我想預約FACIAL', hifuDraft, newSlots, catalog, taxonomy,
+      );
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe('clear');
+    });
+  });
+
+  // Non-beauty fixture parity: shared English token "Class" (gyms, studios) + unique 1:1 product
+  describe('Service switch detection (group-class / fitness parity)', () => {
+    const fitnessKB: KnowledgeChunk[] = [
+      { documentId: 'pt', title: 'Personal Training 1:1', content: 'HKD 800', score: 1 },
+      { documentId: 'hiit', title: 'HIIT Class', content: 'HKD 200', score: 1 },
+      { documentId: 'spin', title: 'Spin Class', content: 'HKD 180', score: 1 },
+      { documentId: 'yoga', title: 'Yoga Class', content: 'HKD 160', score: 1 },
+    ];
+    const fitCatalog = buildServiceCatalog(fitnessKB);
+    const fitTax = buildServiceTaxonomy(fitCatalog);
+
+    const ptDraft: BookingDraft = {
+      bookingId: null,
+      mode: null,
+      serviceName: 'Personal Training 1:1',
+      serviceDisplayName: 'Personal Training 1:1',
+      date: '2026-04-23',
+      time: '16:00',
+      customerName: 'Alex',
+      phone: '91234567',
+    };
+
+    it('shared category "class" (ambiguous family) while drafting PT → clear', () => {
+      const result = detectServiceSwitch('我想預約Class', ptDraft, {}, fitCatalog, fitTax);
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe('clear');
+    });
+
+    it('specific "Spin Class" while drafting PT → replace', () => {
+      const result = detectServiceSwitch('我想做Spin Class', ptDraft, {}, fitCatalog, fitTax);
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe('replace');
+      expect(result!.serviceDisplayName).toBe('Spin Class');
+    });
+
+    it('LLM pre-merged HIIT Class + user only category "class" → clear', () => {
+      const newSlots: Partial<BookingDraft> = {
+        serviceName: 'HIIT Class',
+        serviceDisplayName: 'HIIT Class',
+      };
+      const result = detectServiceSwitch('我想預約class', ptDraft, newSlots, fitCatalog, fitTax);
+      expect(result).not.toBeNull();
+      expect(result!.type).toBe('clear');
     });
   });
 });
