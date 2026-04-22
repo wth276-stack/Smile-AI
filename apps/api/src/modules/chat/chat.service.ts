@@ -19,6 +19,7 @@ import type { ChatMessageDto } from './dto/chat-message.dto';
 import type { PublicChatDto } from './dto/public-chat.dto';
 import { shouldEscapeStaleConfirmation } from './stale-confirmation-escape';
 import { buildAiMessageMetadata, messageContentForAiEngine } from './ai-message-metadata';
+import { resolveModifyFlowBookingLookup } from './booking-lookup-mode';
 import {
   baseWhatsappIdForPhone,
   parseTestSessionAllowlist,
@@ -89,6 +90,9 @@ export class ChatService {
     const isDemoChat =
       tenantId === 'demo-tenant' && channel === 'WEBCHAT' && (contactName ?? '') === 'Demo User';
 
+    /** When true, booking lookup must not match other sessions that share the same wa_id digits. */
+    let whatsappTestSessionActive = false;
+
     if (channel === 'WHATSAPP') {
       const testSessionEnabled = process.env.WHATSAPP_TEST_SESSION_ENABLED === 'true';
       const testSessionAllowlist = parseTestSessionAllowlist(process.env.WHATSAPP_TEST_SESSION_ALLOWLIST);
@@ -99,6 +103,7 @@ export class ChatService {
         testSessionAllowlist,
       );
       if (parsed.activated) {
+        whatsappTestSessionActive = true;
         this.logger.log(
           `WhatsApp test session: wa_id=${externalContactId} sessionKey=${parsed.sessionKey} ` +
             `externalContactId=${parsed.externalContactId}`,
@@ -263,11 +268,14 @@ export class ChatService {
     let bookingLookupPhone: string | null | undefined;
 
     if (shouldLookupExisting) {
-      const rows = await this.lookupUpcomingBookings(
-        tenantId,
-        phoneForLookup.length >= 8 ? phoneForLookup : null,
-        contact.id,
-      );
+      // Production: match upcoming rows by conversation contact OR shared phone (last 8).
+      // WhatsApp #test:blockX: each session is a separate contact; phone scan would pull in
+      // bookings from block1/block2 under the same wa_id — scope to this contact only.
+      const { lookupPhone, lookupMode } = resolveModifyFlowBookingLookup({
+        whatsappTestSessionActive,
+        phoneForLookup,
+      });
+      const rows = await this.lookupUpcomingBookings(tenantId, lookupPhone, contact.id);
       existingBookings = rows.map((b) => ({
         id: b.id,
         serviceName: b.serviceName,
@@ -312,7 +320,7 @@ export class ChatService {
         }
       }
       this.logger.log(
-        `[chat.service] Booking lookup tenant=${tenantId} conv=${conversation.id} contact=${contact.id} phone=${bookingLookupPhone ?? '(none)'} count=${rows.length}`,
+        `[chat.service] Booking lookup lookupMode=${lookupMode} tenant=${tenantId} conv=${conversation.id} contact=${contact.id} phone=${bookingLookupPhone ?? '(none)'} count=${rows.length}`,
       );
     } else {
       // Live path: modify keywords absent — still load contact-scoped upcoming rows so
@@ -328,7 +336,7 @@ export class ChatService {
           customerName: b.customerName,
         }));
         this.logger.log(
-          `[chat.service] Contact booking lookup (hydration) tenant=${tenantId} conv=${conversation.id} contact=${contact.id} count=${rows.length}`,
+          `[chat.service] Booking lookup lookupMode=contact-only tenant=${tenantId} conv=${conversation.id} contact=${contact.id} count=${rows.length} (hydration)`,
         );
       }
     }

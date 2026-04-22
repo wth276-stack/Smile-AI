@@ -1,6 +1,10 @@
 /**
  * Optional WhatsApp test sessions: "#test:<sessionKey> <message>" with env + allowlist.
  * See WHATSAPP_TEST_SESSION_ENABLED and WHATSAPP_TEST_SESSION_ALLOWLIST.
+ *
+ * When activated, `externalContactId` becomes `waId::sessionKey` so conversation/contact
+ * state is isolated. ChatService also scopes upcoming-booking lookup to that contact only
+ * (no phone-based cross-contact match), so prior #test:block* bookings do not leak.
  */
 const WHATSAPP_TEST_PREFIX = /^#test:([A-Za-z0-9._-]+)\s+/;
 
