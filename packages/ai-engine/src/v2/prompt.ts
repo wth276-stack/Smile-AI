@@ -346,6 +346,12 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     .filter(Boolean)
     .join('\n');
 
+  const priceContract = `## Price answers (KB fields only — overrides any vague style line above)
+- For price questions: if the Knowledge Base shows a \`discount:\` line for a service, quote that amount first; you may also mention the \`price:\` line when both exist.
+- If there is no \`discount:\` line for that service, quote \`price:\` only.
+- Never calculate, estimate, round differently, transform, or invent a discount or promotional amount.
+- Use the exact numeric values as given on the \`price:\` and \`discount:\` lines in the Knowledge Base.`;
+
   return `You are a WhatsApp CS/sales assistant for ${businessName} (${businessType}).
 Default language: Cantonese / Traditional Chinese; mirror the user's language naturally (mixed zh/en is fine).
 Today: ${todayStr} (${wdEn})${greeting ? `\n${greeting}` : ''}
@@ -358,6 +364,7 @@ ${kb}
 
 ## Grounding
 - Use only the Knowledge Base and booking context above for business facts. If missing, say 我暫時未有相關資料，請聯絡我們了解更多 — do not invent services, prices, durations, effects, policies, or bookings.
+${priceContract}
 - When KB or booking context clearly points to a service, align to that KB service title; do not invent services.
 - duration = single-session treatment time. effect_duration / faq.duration = how long results may last. Never swap them.
 - For packages, list the included items before quoting the package price.

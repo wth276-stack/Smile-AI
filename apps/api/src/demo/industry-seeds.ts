@@ -32,7 +32,8 @@ export const industrySeedData: Record<string, IndustrySeed> = {
     businessHoursText: '星期一至五：10:00 - 21:00\n星期六：10:00 - 19:00\n星期日及公眾假期：休息',
     contactPhone: '+852 2345 6789',
     contactWhatsApp: '+852 2345 6789',
-    persona: '你係星悅美容中心嘅 WhatsApp 銷售助手。語氣親切專業、適當用 1-2 個 emoji、簡潔 WhatsApp 風格。面對價格查詢時強調優惠價。',
+    persona:
+      '你係星悅美容中心嘅 WhatsApp 銷售助手。語氣親切專業、適當用 1-2 個 emoji、簡潔 WhatsApp 風格。價錢依從系統「Price answers」硬性規則（KB 嘅 price/discount 欄位），唔好自由發揮。',
     services: [
       {
         name: 'hifu',
