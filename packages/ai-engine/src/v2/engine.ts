@@ -28,6 +28,7 @@ import {
   getMissingBookingSlots,
 } from '../booking-state';
 import { buildServiceCatalog, buildServiceTaxonomy, detectServiceSwitch, matchService } from '../service-matcher';
+import { buildSlotPolicyFromTenantSettings, validateBookingSlot } from '../booking-slot-availability';
 
 const FALLBACK_REPLY = '抱歉，系統暫時遇到問題，請稍後再試 🙏';
 
@@ -46,6 +47,30 @@ function debugLog(...args: unknown[]): void {
  * return REPLY_ONLY / REPLY / CONFIRM_BOOKING instead of SUBMIT_BOOKING — duplicate-affirm guard
  * never runs, but Case 3 would still replace the reply with a confirmation template. Skip that.
  */
+function draftHasValidDateTimeForSlotGate(draft: BookingDraft): boolean {
+  const date = String(draft.date ?? '').trim();
+  const time = String(draft.time ?? '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{1,2}:\d{2}$/.test(time)) return false;
+  return true;
+}
+
+function shouldRunSlotAvailabilityGate(
+  finalAction: string,
+  finalMergedDraft: BookingDraft,
+): boolean {
+  if (!draftHasValidDateTimeForSlotGate(finalMergedDraft)) return false;
+  if (finalAction === 'CONFIRM_BOOKING' || finalAction === 'MODIFY_BOOKING' || finalAction === 'SUBMIT_BOOKING')
+    return true;
+  if (
+    finalAction === 'COLLECT_BOOKING' &&
+    finalMergedDraft.mode === 'modify' &&
+    bookingDraftHasAllRequiredSlots(finalMergedDraft)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function shouldSkipCase3WhenAffirmingWithoutPending(
   input: AiEngineInput,
   finalMergedDraft: BookingDraft,
@@ -878,11 +903,37 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
       }
     }
 
+    let slotAvailabilityBlocked = false;
+    {
+      if (shouldRunSlotAvailabilityGate(finalAction, finalMergedDraft)) {
+        const policy = buildSlotPolicyFromTenantSettings(input.tenant.settings ?? {});
+        const gate = validateBookingSlot({
+          date: String(finalMergedDraft.date ?? '').trim(),
+          time: String(finalMergedDraft.time ?? '').trim(),
+          service: finalMergedDraft.serviceName ?? finalMergedDraft.serviceDisplayName ?? null,
+          timeZone: policy.timeZone,
+          businessHours: policy.businessHours,
+          closedDays: policy.closedDays,
+          bookingPolicy: policy.bookingPolicy,
+          calendarAvailability: null,
+          now: new Date(),
+        });
+        if (!gate.allowed) {
+          slotAvailabilityBlocked = true;
+          finalAction = 'COLLECT_BOOKING';
+          const extra = gate.suggestedAlternatives?.trim();
+          finalReply = [gate.reason.trim(), extra].filter(Boolean).join(' ');
+          console.warn('[v2/engine] Slot availability gate blocked:', gate.code);
+        }
+      }
+    }
+
     const finalLegacyAction = mapActionToLegacy(finalAction);
 
     const sideEffects = buildSideEffects(finalAction, finalMergedDraft, finalNewSlots, ctx);
 
     const modifySummaryAwaitingAffirm =
+      !slotAvailabilityBlocked &&
       finalMergedDraft.mode === 'modify' &&
       !!String(finalMergedDraft.bookingId ?? '').trim() &&
       bookingDraftHasAllRequiredSlots(finalMergedDraft) &&
@@ -895,7 +946,9 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
         extractedFields: buildExtractedFields(finalNewSlots),
         action: finalLegacyAction,
         bookingDraft: finalMergedDraft,
-        confirmationPending: finalAction === 'CONFIRM_BOOKING' || modifySummaryAwaitingAffirm,
+        confirmationPending:
+          !slotAvailabilityBlocked && (finalAction === 'CONFIRM_BOOKING' || modifySummaryAwaitingAffirm),
+        slotAvailabilityBlocked: slotAvailabilityBlocked || undefined,
         _auditPreBoundary: preBoundaryAudit,
       },
       sideEffects,

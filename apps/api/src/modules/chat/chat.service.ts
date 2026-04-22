@@ -6,7 +6,13 @@ import { ContactsService } from '../contacts/contacts.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import { KnowledgeRetrieverService } from './knowledge-retriever.service';
 import { ChatPersistenceService } from './chat-persistence.service';
-import { bookingDraftHasAllRequiredSlots, emptyDraft, extractSlots, runAiEngine } from '@ats/ai-engine';
+import {
+  bookingDraftHasAllRequiredSlots,
+  emptyDraft,
+  extractSlots,
+  provisionalCustomerNameFromExistingBookings,
+  runAiEngine,
+} from '@ats/ai-engine';
 import type { AiEngineInput, AiEngineResult, BookingDraft } from '@ats/ai-engine';
 import { getConversationBookingState, updateBookingDraft, mergeConversationMetadata } from '@ats/database';
 import type { ChatMessageDto } from './dto/chat-message.dto';
@@ -308,6 +314,14 @@ export class ChatService {
       this.logger.log(
         `[chat.service] Booking lookup tenant=${tenantId} conv=${conversation.id} contact=${contact.id} phone=${bookingLookupPhone ?? '(none)'} count=${rows.length}`,
       );
+    }
+
+    const rememberedName = provisionalCustomerNameFromExistingBookings(
+      bookingDraftForEngine,
+      existingBookings,
+    );
+    if (rememberedName && !bookingDraftForEngine.customerName?.trim()) {
+      bookingDraftForEngine = { ...bookingDraftForEngine, customerName: rememberedName };
     }
 
     const knowledge = await this.knowledgeRetriever.retrieveForMessage(

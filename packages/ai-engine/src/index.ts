@@ -30,9 +30,11 @@ export {
   getMissingSlots,
   isBookingComplete,
   bookingDraftHasAllRequiredSlots,
+  provisionalCustomerNameFromExistingBookings,
   isValidHkPhone,
   verifyBookingDateTimeRegression,
 } from './booking-state';
+export { validateBookingSlot, buildSlotPolicyFromTenantSettings, parseBusinessHoursToWeekly } from './booking-slot-availability';
 export {
   detectIntent,
   classifyDetailQuestion,

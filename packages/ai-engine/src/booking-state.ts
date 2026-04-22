@@ -99,6 +99,27 @@ export function bookingDraftHasAllRequiredSlots(draft: BookingDraft): boolean {
   );
 }
 
+/**
+ * Provisional `customerName` from confirmed booking(s) in system state — not from channel profile.
+ * If draft already has a name (user or prior turn), that wins.
+ */
+export function provisionalCustomerNameFromExistingBookings(
+  draft: Pick<BookingDraft, 'bookingId' | 'customerName'>,
+  existing:
+    | Array<{ id: string; customerName?: string | null }>
+    | undefined
+    | null,
+): string | null {
+  if (draft.customerName?.trim()) return draft.customerName.trim();
+  if (!existing?.length) return null;
+  if (draft.bookingId) {
+    const m = existing.find((b) => b.id === draft.bookingId);
+    return m?.customerName?.trim() ?? null;
+  }
+  if (existing.length === 1) return existing[0]!.customerName?.trim() ?? null;
+  return null;
+}
+
 /** Which required slots are still missing (service satisfied by code or display name). */
 export function getMissingBookingSlots(draft: BookingDraft): string[] {
   const missing: string[] = [];
@@ -160,6 +181,8 @@ function extractDate(msg: string, ref: Date): string | null {
         const m = parseInt(zhDate[1], 10);
         const day = parseInt(zhDate[2], 10);
         out = resolveZhMonthDay(m, day, ref);
+      } else {
+        out = extractBareDayHao(msg, ref);
       }
     }
   }
@@ -213,6 +236,36 @@ function getNextWeekday(targetDay: number, forceNextWeek: boolean, ref: Date): s
   return addCalendarDaysHKT(refYmd, daysAhead);
 }
 
+/**
+ * Day-only references like 9號 / 9号 / 9日 (no month). Same month as `ref` if that
+ * calendar day is still >= ref; otherwise next month, mirroring v2 `resolveRelativeDates`.
+ */
+function extractBareDayHao(msg: string, ref: Date): string | null {
+  const m = /(\d{1,2})[號号日]/.exec(msg);
+  if (!m) return null;
+  const dayNum = parseInt(m[1], 10);
+  if (dayNum < 1 || dayNum > 31) return null;
+  const refYmd = formatDateHKYmd(ref);
+  const [y, mon] = refYmd.split('-').map(Number);
+  const pad = (n: number) => String(n).padStart(2, '0');
+
+  const ymdInMonth = (yy: number, month: number, day: number): string | null => {
+    const t = new Date(Date.UTC(yy, month - 1, day));
+    if (t.getUTCDate() !== day) return null;
+    return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`;
+  };
+
+  let ymd = ymdInMonth(y, mon, dayNum);
+  if (!ymd) return null;
+  if (ymd < refYmd) {
+    const nextY = mon === 12 ? y + 1 : y;
+    const nextM = mon === 12 ? 1 : mon + 1;
+    ymd = ymdInMonth(nextY, nextM, dayNum) ?? null;
+  }
+  if (!ymd || ymd < refYmd) return null;
+  return ymd;
+}
+
 // ── Time extraction ───────────────────────────────────────────────────────────
 
 function extractTime(msg: string): string | null {
@@ -260,10 +313,15 @@ function extractTime(msg: string): string | null {
     const hour = parseInt(zhBare[1], 10);
     const hasHalf = msg.includes('半');
     const minute = hasHalf ? 30 : zhBare[2] ? parseInt(zhBare[2], 10) : 0;
-    if (hour >= 13 && hour <= 23)
-      return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-    if (hour === 12)
-      return `12:${String(minute).padStart(2, '0')}`;
+    if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+      if (hour >= 13 && hour <= 23)
+        return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+      if (hour === 12)
+        return `12:${String(minute).padStart(2, '0')}`;
+      // Morning-style bare hours 1–11 點 (e.g. 9號11點 → 11:00)
+      if (hour >= 1 && hour <= 11)
+        return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    }
   }
 
   return null;
@@ -386,7 +444,19 @@ export function verifyBookingDateTimeRegression(): { ok: boolean; failures: stri
       failures.push(`${label}: date extract ${JSON.stringify(msg)} => ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
   }
 
-  expectTime('bare 7點 ambiguous', '明天7點', null);
+  // Bare 1–11 點 are valid (e.g. book 9號11點); 7點 here resolves to 07:00.
+  expectTime('明天7點 bare', '明天7點', '07:00');
+  {
+    const ex = extractSlotsWithReferenceDate(
+      '我想 book 9號11點參加活動',
+      new Date('2026-04-01T12:00:00+08:00')
+    );
+    if (ex.date !== '2026-04-09' || ex.time !== '11:00') {
+      failures.push(
+        `9號11點 slots: want date 2026-04-09 / time 11:00, got ${JSON.stringify(ex)}`
+      );
+    }
+  }
   expectTime('晚上7點', '晚上7點', '19:00');
   expectTime('早上7點', '早上7點', '07:00');
   expectTime('7:30pm', '7:30pm', '19:30');

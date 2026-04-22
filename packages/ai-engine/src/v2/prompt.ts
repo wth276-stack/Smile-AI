@@ -70,7 +70,7 @@ function normalizeMaintenanceSig(s: string | null | undefined): string | null {
   return null;
 }
 
-/** Effect duration from FAQ / 功效 (not 療程時長 session length). */
+/** Effect duration from FAQ / 功效 (not single-session duration). */
 function extractKbEffectDurationLine(c: KnowledgeChunk): string | null {
   for (const f of c.faqItems ?? []) {
     const qa = `${f.question}\n${f.answer}`;
@@ -330,10 +330,8 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   }
   const draftName = ctx.currentDraft?.customerName;
   const greeting = draftName
-    ? `The customer's name for this booking is ${draftName}. Use it naturally when appropriate.`
-    : ctx.contactName
-      ? `Contact name on file: ${ctx.contactName} (may be from a previous booking — confirm with the customer if starting a new booking).`
-      : '';
+    ? `The booking name is "${draftName}" (from a prior system booking or what the user gave). If they give a different name, use the latest.`
+    : `Do not use the channel profile or display name as the booking name. If customerName is still missing, ask for it.`;
   const today = getHKTToday();
   const todayStr = formatDateHKYmd(today);
   const wd = getHKTJsWeekday(today);
@@ -347,10 +345,12 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     .join('\n');
 
   const priceContract = `## Price answers (KB fields only — overrides any vague style line above)
-- For price questions: if the Knowledge Base shows a \`discount:\` line for a service, quote that amount first; you may also mention the \`price:\` line when both exist.
-- If there is no \`discount:\` line for that service, quote \`price:\` only.
+- For price questions: if the Knowledge Base shows a \`discount:\` line for an item, quote that amount as the promotional/sale line; you may also mention the \`price:\` line (list/standard) when both exist.
+- If there is no \`discount:\` line for that item, quote \`price:\` only.
 - Never calculate, estimate, round differently, transform, or invent a discount or promotional amount.
-- Use the exact numeric values as given on the \`price:\` and \`discount:\` lines in the Knowledge Base.`;
+- Use the exact numeric values as given on the \`price:\` and \`discount:\` lines in the Knowledge Base.
+- Do not present (list − promotional), 實付, or any "net" number as the promotional price — the promotional figure is the \`discount:\` value itself, not a computed remainder.
+- Correct: name the \`discount:\` amount and the \`price:\` amount from the KB lines. Wrong: show (price − discount) as if it were the \`discount:\` amount.`;
 
   return `You are a WhatsApp CS/sales assistant for ${businessName} (${businessType}).
 Default language: Cantonese / Traditional Chinese; mirror the user's language naturally (mixed zh/en is fine).
@@ -366,7 +366,7 @@ ${kb}
 - Use only the Knowledge Base and booking context above for business facts. If missing, say 我暫時未有相關資料，請聯絡我們了解更多 — do not invent services, prices, durations, effects, policies, or bookings.
 ${priceContract}
 - When KB or booking context clearly points to a service, align to that KB service title; do not invent services.
-- duration = single-session treatment time. effect_duration / faq.duration = how long results may last. Never swap them.
+- duration = single-session length. effect_duration / faq.duration = how long results may last. Never swap them.
 - For packages, list the included items before quoting the package price.
 
 ## Booking Flow

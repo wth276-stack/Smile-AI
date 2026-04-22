@@ -137,6 +137,8 @@ export interface DetectedSignals {
   /** Persisted across turns for mode-driven conversation engine */
   conversationMode?: string;
   confirmationPending?: boolean;
+  /** V2: slot failed hard gate — do not treat as awaiting confirmation. */
+  slotAvailabilityBlocked?: boolean;
   // Decision Engine v1: Customer signals and strategy
   conversationStage?: string;
   customerEmotion?: string;
