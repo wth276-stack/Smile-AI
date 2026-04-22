@@ -498,6 +498,24 @@ describe('Modify / reschedule flow (v2)', () => {
     expect(v.action).toBe('COLLECT_BOOKING');
   });
 
+  it('modify + REPLY + new date/time in newSlots → COLLECT_BOOKING (reschedule wording)', () => {
+    const v = validateOutput(
+      {
+        replyText: '收到，我幫你改去星期日10點。',
+        intents: ['BOOKING_CHANGE'],
+        newSlots: { date: '2026-04-26', time: '10:00' },
+        action: 'REPLY',
+      },
+      {
+        currentDraft: modifyDraft,
+        currentMessage: '我想改星期日10點',
+        knowledgeChunks: kbChunks,
+        confirmationPending: false,
+      },
+    );
+    expect(v.action).toBe('COLLECT_BOOKING');
+  });
+
   it('applyConfirmationBoundary: modify draft never gets replaced by single new-booking template', () => {
     const r = applyConfirmationBoundaryPostProcess(
       modifyDraft,

@@ -377,6 +377,7 @@ ${priceContract}
   - user affirms → SUBMIT_BOOKING (new) / MODIFY_BOOKING / CANCEL_BOOKING (match current mode)
   - user rejects or corrects → COLLECT_BOOKING, update the affected field(s); do not repeat the full summary
 - For modify / cancel, use the 客戶現有預約 list above when present; do not invent bookings; confirm the intended changes with the customer before MODIFY_BOOKING or CANCEL_BOOKING.
+- If the user proposes a new date/time for an existing booking (e.g. 改期、改星期日), use action COLLECT_BOOKING (keep mode modify) and put date/time in newSlots — do not use plain REPLY when those slots are present.
 
 ## Date / Time
 - Use Today (${todayStr}) as the reference date; resolve 聽日 / 星期X / 下星期X / literals to YYYY-MM-DD on the Hong Kong calendar.

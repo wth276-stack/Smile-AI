@@ -14,10 +14,17 @@ export interface IndustryKB {
   content: string;
 }
 
+/** Weekly keys mon..sun — consumed by validateBookingSlot / parseBusinessHoursToWeekly (tenant.settings.businessHours). */
+export type StructuredBusinessHours = Record<string, string>;
+
 export interface IndustrySeed {
   id: string;
   displayName: string;
   businessHoursText: string;
+  /** IANA tz for slot gate; defaults to Asia/Hong_Kong in demo merge if omitted. */
+  timezone?: string;
+  /** Structured hours aligned with businessHoursText (required for closed-day slot gate). */
+  businessHours?: StructuredBusinessHours;
   contactPhone: string;
   contactWhatsApp: string;
   persona: string;
@@ -30,6 +37,16 @@ export const industrySeedData: Record<string, IndustrySeed> = {
     id: 'beauty',
     displayName: '星悅美容中心',
     businessHoursText: '星期一至五：10:00 - 21:00\n星期六：10:00 - 19:00\n星期日及公眾假期：休息',
+    timezone: 'Asia/Hong_Kong',
+    businessHours: {
+      mon: '10:00-21:00',
+      tue: '10:00-21:00',
+      wed: '10:00-21:00',
+      thu: '10:00-21:00',
+      fri: '10:00-21:00',
+      sat: '10:00-19:00',
+      sun: 'closed',
+    },
     contactPhone: '+852 2345 6789',
     contactWhatsApp: '+852 2345 6789',
     persona:
@@ -94,6 +111,16 @@ export const industrySeedData: Record<string, IndustrySeed> = {
     id: 'cleaning',
     displayName: '亮晶晶清潔服務',
     businessHoursText: '星期一至六：08:00 - 20:00\n星期日：09:00 - 18:00\n公眾假期照常服務（需提前預約）',
+    timezone: 'Asia/Hong_Kong',
+    businessHours: {
+      mon: '08:00-20:00',
+      tue: '08:00-20:00',
+      wed: '08:00-20:00',
+      thu: '08:00-20:00',
+      fri: '08:00-20:00',
+      sat: '08:00-20:00',
+      sun: '09:00-18:00',
+    },
     contactPhone: '+852 3456 7890',
     contactWhatsApp: '+852 3456 7890',
     persona: '你係亮晶晶清潔服務嘅 WhatsApp 助手。語氣實際直接、重效率。客人問價時主動問面積/房間數以報準啲。強調「免費上門估價」。',
@@ -174,6 +201,16 @@ export const industrySeedData: Record<string, IndustrySeed> = {
     id: 'renovation',
     displayName: '匠心裝修工程',
     businessHoursText: '星期一至五：09:00 - 19:00\n星期六：09:00 - 13:00\n星期日及公眾假期：休息（緊急工程除外）',
+    timezone: 'Asia/Hong_Kong',
+    businessHours: {
+      mon: '09:00-19:00',
+      tue: '09:00-19:00',
+      wed: '09:00-19:00',
+      thu: '09:00-19:00',
+      fri: '09:00-19:00',
+      sat: '09:00-13:00',
+      sun: 'closed',
+    },
     contactPhone: '+852 4567 8901',
     contactWhatsApp: '+852 4567 8901',
     persona: '你係匠心裝修工程嘅 WhatsApp 助手。語氣專業穩重、耐心解答。主動強調「免費度尺報價」。遇到複雜工程需求時建議安排師傅上門睇。',
@@ -250,6 +287,16 @@ export const industrySeedData: Record<string, IndustrySeed> = {
     id: 'consulting',
     displayName: '信諾私人咨詢中心',
     businessHoursText: '星期一至五：10:00 - 20:00\n星期六：10:00 - 16:00\n星期日及公眾假期：休息',
+    timezone: 'Asia/Hong_Kong',
+    businessHours: {
+      mon: '10:00-20:00',
+      tue: '10:00-20:00',
+      wed: '10:00-20:00',
+      thu: '10:00-20:00',
+      fri: '10:00-20:00',
+      sat: '10:00-16:00',
+      sun: 'closed',
+    },
     contactPhone: '+852 5678 9012',
     contactWhatsApp: '+852 5678 9012',
     persona: '你係信諾私人咨詢中心嘅 WhatsApp 助手。語氣溫和專業、尊重私隱。唔好主動追問咨詢內容細節。強調「所有咨詢絕對保密」。遇到緊急情況（如情緒危機）建議即時聯絡專業熱線。',
@@ -313,6 +360,16 @@ export const industrySeedData: Record<string, IndustrySeed> = {
     id: 'fitness',
     displayName: 'ZenFit Studio',
     businessHoursText: '星期一至五：07:00 - 22:00\n星期六日：08:00 - 20:00\n公眾假期：09:00 - 18:00',
+    timezone: 'Asia/Hong_Kong',
+    businessHours: {
+      mon: '07:00-22:00',
+      tue: '07:00-22:00',
+      wed: '07:00-22:00',
+      thu: '07:00-22:00',
+      fri: '07:00-22:00',
+      sat: '08:00-20:00',
+      sun: '08:00-20:00',
+    },
     contactPhone: '+852 6789 0123',
     contactWhatsApp: '+852 6789 0123',
     persona: '你係 ZenFit Studio 嘅 WhatsApp 助手。語氣活力正面、鼓勵性、用少少 emoji 但唔好過火。強調「第一堂半價體驗」。主動問客人嘅運動經驗同目標。',

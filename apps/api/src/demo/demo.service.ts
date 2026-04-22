@@ -85,6 +85,10 @@ export class DemoService {
       contactWhatsApp: seed.contactWhatsApp,
       businessType: mapIndustryToBusinessType(seed.id),
     };
+    if (seed.businessHours) {
+      mergedSettings.businessHours = seed.businessHours;
+      mergedSettings.timezone = seed.timezone ?? 'Asia/Hong_Kong';
+    }
 
     await this.prisma.tenant.update({
       where: { id: DEMO_TENANT_ID },

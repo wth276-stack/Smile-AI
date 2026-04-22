@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  buildSlotPolicyFromTenantSettings,
   parseBusinessHoursToWeekly,
   validateBookingSlot,
 } from './booking-slot-availability';
@@ -45,6 +46,33 @@ describe('provisionalCustomerNameFromExistingBookings', () => {
       ],
     );
     expect(n).toBeNull();
+  });
+});
+
+describe('buildSlotPolicyFromTenantSettings', () => {
+  it('uses tenant.settings.businessHours so Sunday closed is enforced', () => {
+    const policy = buildSlotPolicyFromTenantSettings({
+      timezone: 'Asia/Hong_Kong',
+      businessHours: {
+        mon: '10:00-21:00',
+        tue: '10:00-21:00',
+        wed: '10:00-21:00',
+        thu: '10:00-21:00',
+        fri: '10:00-21:00',
+        sat: '10:00-19:00',
+        sun: 'closed',
+      },
+    });
+    const r = validateBookingSlot({
+      date: '2026-04-26',
+      time: '10:00',
+      timeZone: policy.timeZone,
+      businessHours: policy.businessHours,
+      bookingPolicy: policy.bookingPolicy,
+      now,
+    });
+    expect(r.allowed).toBe(false);
+    expect(r.code).toBe('closed_day');
   });
 });
 

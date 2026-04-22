@@ -76,6 +76,13 @@ function shouldRunSlotAvailabilityGate(
   ) {
     return true;
   }
+  // Fallback: REPLY misclassification with modify/cancel + concrete slot still needs the hard gate.
+  if (
+    (finalAction === 'REPLY' || finalAction === 'REPLY_ONLY') &&
+    (finalMergedDraft.mode === 'modify' || finalMergedDraft.mode === 'cancel')
+  ) {
+    return true;
+  }
   return false;
 }
 

@@ -7,17 +7,38 @@ const DEMO_TENANT_ID = 'demo-tenant';
 const DEMO_USER_EMAIL = 'demo@example.com';
 const DEMO_USER_PASSWORD = 'demo123456';
 
+/** Aligns with beauty industry seed: Sun closed, Mon–Fri 10–21, Sat 10–19 (tenant.settings for slot gate). */
+const DEMO_TENANT_SLOT_SETTINGS = {
+  timezone: 'Asia/Hong_Kong',
+  businessHours: {
+    mon: '10:00-21:00',
+    tue: '10:00-21:00',
+    wed: '10:00-21:00',
+    thu: '10:00-21:00',
+    fri: '10:00-21:00',
+    sat: '10:00-19:00',
+    sun: 'closed',
+  },
+};
+
 async function main() {
   console.log('🌱 Seeding demo tenant...');
+
+  const existingTenant = await prisma.tenant.findUnique({ where: { id: DEMO_TENANT_ID } });
+  const mergedSettings = {
+    ...((existingTenant?.settings as Record<string, unknown>) ?? {}),
+    ...DEMO_TENANT_SLOT_SETTINGS,
+  };
 
   // Create or update demo tenant
   const tenant = await prisma.tenant.upsert({
     where: { id: DEMO_TENANT_ID },
-    update: { name: '美容療程示範店' },
+    update: { name: '美容療程示範店', settings: mergedSettings },
     create: {
       id: DEMO_TENANT_ID,
       name: '美容療程示範店',
       plan: 'GROWTH',
+      settings: DEMO_TENANT_SLOT_SETTINGS,
     },
   });
 

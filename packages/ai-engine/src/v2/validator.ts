@@ -322,6 +322,19 @@ export function validateOutput(
 
   const mergedDraft = mergeBookingDraft(ctx.currentDraft, newSlots);
 
+  // Modify flow: model sometimes returns REPLY while filling date/time — keep collect + slot gate path.
+  if (
+    (action === 'REPLY' || action === 'REPLY_ONLY') &&
+    hasModifyBookingId(mergedDraft) &&
+    (orNull((newSlots as Partial<BookingDraft>).date) || orNull((newSlots as Partial<BookingDraft>).time)) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(String(mergedDraft.date ?? '')) &&
+    /^\d{1,2}:\d{2}$/.test(String(mergedDraft.time ?? ''))
+  ) {
+    action = 'COLLECT_BOOKING';
+    issues.push('Override: REPLY → COLLECT_BOOKING (modify + date/time in newSlots)');
+    console.warn('[v2/validator] Override: REPLY → COLLECT_BOOKING (modify + proposed slots)');
+  }
+
   if (newSlots.serviceDisplayName) {
     if (!isServiceRecognizedInKnowledge(newSlots.serviceDisplayName, ctx.knowledgeChunks)) {
       issues.push(`Service "${newSlots.serviceDisplayName}" not found in KB`);
