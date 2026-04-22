@@ -13,6 +13,11 @@ import type { ChatMessageDto } from './dto/chat-message.dto';
 import type { PublicChatDto } from './dto/public-chat.dto';
 import { shouldEscapeStaleConfirmation } from './stale-confirmation-escape';
 import { buildAiMessageMetadata, messageContentForAiEngine } from './ai-message-metadata';
+import {
+  baseWhatsappIdForPhone,
+  parseTestSessionAllowlist,
+  parseWhatsappTestSession,
+} from './whatsapp-test-session-override';
 
 const FALLBACK_REPLY = '收到你嘅訊息，我哋同事會盡快回覆你，感謝耐心等候！';
 
@@ -73,9 +78,29 @@ export class ChatService {
   }
 
   async handleInboundMessage(dto: ChatMessageDto) {
-    const { tenantId, channel, externalContactId, contactName, message } = dto;
+    const { tenantId, channel, contactName } = dto;
+    let { externalContactId, message } = dto;
     const isDemoChat =
       tenantId === 'demo-tenant' && channel === 'WEBCHAT' && (contactName ?? '') === 'Demo User';
+
+    if (channel === 'WHATSAPP') {
+      const testSessionEnabled = process.env.WHATSAPP_TEST_SESSION_ENABLED === 'true';
+      const testSessionAllowlist = parseTestSessionAllowlist(process.env.WHATSAPP_TEST_SESSION_ALLOWLIST);
+      const parsed = parseWhatsappTestSession(
+        externalContactId,
+        message,
+        testSessionEnabled,
+        testSessionAllowlist,
+      );
+      if (parsed.activated) {
+        this.logger.log(
+          `WhatsApp test session: wa_id=${externalContactId} sessionKey=${parsed.sessionKey} ` +
+            `externalContactId=${parsed.externalContactId}`,
+        );
+        externalContactId = parsed.externalContactId;
+        message = parsed.messageText;
+      }
+    }
 
     const contact = await this.contacts.resolveOrCreate(tenantId, externalContactId, contactName, channel);
 
@@ -200,8 +225,9 @@ export class ChatService {
     };
 
     // WhatsApp auto-fill: wa_id is the sender's phone; strip "852" country prefix for HK
-    const waPhone = channel === 'WHATSAPP' && externalContactId
-      ? externalContactId.replace(/^852/, '').replace(/[^0-9]/g, '') || externalContactId
+    const waIdForPhone = channel === 'WHATSAPP' ? baseWhatsappIdForPhone(externalContactId) : null;
+    const waPhone = waIdForPhone
+      ? waIdForPhone.replace(/^852/, '').replace(/[^0-9]/g, '') || waIdForPhone
       : null;
 
     let bookingDraftForEngine: BookingDraft = {
