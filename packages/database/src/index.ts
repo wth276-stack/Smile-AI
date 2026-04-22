@@ -39,3 +39,11 @@ export {
   getMediaByMessageId,
   readMediaFile,
 } from './media-helpers';
+export {
+  DEMO_TENANT_ID,
+  DEMO_TENANT_CANONICAL_SLOT_SETTINGS,
+  tenantJsonMissingStructuredBusinessHours,
+  mergeDemoTenantSettingsPreservingKeys,
+  ensureDemoTenantStructuredSlotSettings,
+  type EnsureDemoTenantSlotSettingsResult,
+} from './demo-tenant-slot-settings';

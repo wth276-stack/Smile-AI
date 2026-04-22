@@ -1,34 +1,25 @@
 import { PrismaClient, DocType, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import {
+  DEMO_TENANT_CANONICAL_SLOT_SETTINGS,
+  DEMO_TENANT_ID,
+  mergeDemoTenantSettingsPreservingKeys,
+  tenantJsonMissingStructuredBusinessHours,
+} from '../src/demo-tenant-slot-settings';
 
 const prisma = new PrismaClient();
 
-const DEMO_TENANT_ID = 'demo-tenant';
 const DEMO_USER_EMAIL = 'demo@example.com';
 const DEMO_USER_PASSWORD = 'demo123456';
-
-/** Aligns with beauty industry seed: Sun closed, Mon–Fri 10–21, Sat 10–19 (tenant.settings for slot gate). */
-const DEMO_TENANT_SLOT_SETTINGS = {
-  timezone: 'Asia/Hong_Kong',
-  businessHours: {
-    mon: '10:00-21:00',
-    tue: '10:00-21:00',
-    wed: '10:00-21:00',
-    thu: '10:00-21:00',
-    fri: '10:00-21:00',
-    sat: '10:00-19:00',
-    sun: 'closed',
-  },
-};
 
 async function main() {
   console.log('🌱 Seeding demo tenant...');
 
   const existingTenant = await prisma.tenant.findUnique({ where: { id: DEMO_TENANT_ID } });
-  const mergedSettings = {
-    ...((existingTenant?.settings as Record<string, unknown>) ?? {}),
-    ...DEMO_TENANT_SLOT_SETTINGS,
-  };
+  const existingSettings = (existingTenant?.settings as Record<string, unknown>) ?? {};
+  const mergedSettings = tenantJsonMissingStructuredBusinessHours(existingSettings)
+    ? mergeDemoTenantSettingsPreservingKeys(existingSettings, { ...DEMO_TENANT_CANONICAL_SLOT_SETTINGS })
+    : existingSettings;
 
   // Create or update demo tenant
   const tenant = await prisma.tenant.upsert({
@@ -38,7 +29,7 @@ async function main() {
       id: DEMO_TENANT_ID,
       name: '美容療程示範店',
       plan: 'GROWTH',
-      settings: DEMO_TENANT_SLOT_SETTINGS,
+      settings: { ...DEMO_TENANT_CANONICAL_SLOT_SETTINGS },
     },
   });
 

@@ -4,11 +4,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DocType } from '@prisma/client';
-import { updateBookingDraft } from '@ats/database';
+import { DEMO_TENANT_ID, mergeDemoTenantSettingsPreservingKeys, updateBookingDraft } from '@ats/database';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { getIndustrySeed, type IndustryService } from './industry-seeds';
-
-const DEMO_TENANT_ID = 'demo-tenant';
 
 /** Maps industry seed id → tenant.settings.businessType (V2 prompt). */
 const INDUSTRY_BUSINESS_TYPE: Record<string, string> = {
@@ -76,18 +74,19 @@ export class DemoService {
 
     const existingSettings = (tenant.settings as Record<string, unknown>) ?? {};
 
-    const mergedSettings: Record<string, unknown> = {
-      ...existingSettings,
+    let mergedSettings = mergeDemoTenantSettingsPreservingKeys(existingSettings, {
       businessName: seed.displayName,
       assistantRole: seed.persona,
       businessHoursText: seed.businessHoursText,
       contactPhone: seed.contactPhone,
       contactWhatsApp: seed.contactWhatsApp,
       businessType: mapIndustryToBusinessType(seed.id),
-    };
+    });
     if (seed.businessHours) {
-      mergedSettings.businessHours = seed.businessHours;
-      mergedSettings.timezone = seed.timezone ?? 'Asia/Hong_Kong';
+      mergedSettings = mergeDemoTenantSettingsPreservingKeys(mergedSettings, {
+        businessHours: seed.businessHours,
+        timezone: seed.timezone ?? 'Asia/Hong_Kong',
+      });
     }
 
     await this.prisma.tenant.update({
