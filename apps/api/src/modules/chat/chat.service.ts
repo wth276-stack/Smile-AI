@@ -177,24 +177,32 @@ export class ChatService {
     }
 
     // --- Stale confirmation escape: FAQ / price / info while waiting for booking confirm ---
+    // For modify/cancel pending, keep booking draft + bookingId; only clear confirmation flag.
     if (
       confirmationPending &&
       bookingDraft &&
       bookingDraftHasAllRequiredSlots(bookingDraft) &&
       shouldEscapeStaleConfirmation(message)
     ) {
+      const isModifyOrCancelPending =
+        bookingDraft.mode === 'modify' || bookingDraft.mode === 'cancel';
       this.logger.log(
-        `[chat.service] Stale confirmation escaped — user sent FAQ/info query during pending confirmation conv=${conversation.id}`,
+        `[chat.service] Stale confirmation escaped — user sent FAQ/info query during pending confirmation ` +
+          `conv=${conversation.id} modifyOrCancel=${isModifyOrCancelPending}`,
       );
-      await updateBookingDraft(conversation.id, null, false);
-      bookingDraft = undefined;
+      if (isModifyOrCancelPending) {
+        await updateBookingDraft(conversation.id, bookingDraft as unknown as Prisma.InputJsonValue, false);
+      } else {
+        await updateBookingDraft(conversation.id, null, false);
+        bookingDraft = undefined;
+      }
       confirmationPending = false;
     }
 
     const extracted = extractSlots(message);
 
     const modifyCancelKeywords =
-      /改期|取消|取消預約|cancel|reschedule|改時間|修改預約|我想改|想改期|唔要個booking|取消booking/i;
+      /改期|取消|取消預約|cancel|reschedule|改時間|修改預約|我想改|想改期|改到|改.*(星期|禮拜|幾[點時]|號|日)|轉(成|到|日|期)|挪期|夾(檔|期)|星期|禮拜|唔要個booking|取消booking|換(日|期|時間)/i;
     const wantsModifyCancelContext =
       modifyCancelKeywords.test(message) ||
       lastIntents.some((i) => i === 'BOOKING_CHANGE' || i === 'BOOKING_CANCEL');
@@ -277,6 +285,25 @@ export class ChatService {
           ...slots,
           mode: bookingDraftForEngine.mode ?? 'modify',
         };
+      }
+      // One upcoming booking: natural reschedule phrasing (e.g. 改星期日十點) should enter modify even if keywords missed
+      if (rows.length === 1 && !wantsModifyCancelContext) {
+        const m = message.trim();
+        const soleReschedulePhrasing =
+          /改(?!期|做|名|電)|轉(成|到)|想改|挪期|夾(檔|期)/.test(m) ||
+          (/(?:星期|禮拜|幾[點時]|am|pm|\d+號)/i.test(m) && /[改轉揀]/.test(m));
+        if (soleReschedulePhrasing) {
+          await mergeConversationMetadata(conversation.id, { modifyCancelFlow: true });
+          modifyCancelFlow = true;
+          bookingDraftForEngine = {
+            ...bookingDraftForEngine,
+            mode: bookingDraftForEngine.mode === 'cancel' ? 'cancel' : 'modify',
+          };
+          if (!bookingDraftForEngine.bookingId) {
+            const slots = this.bookingRowToDraftSlots(rows[0]);
+            bookingDraftForEngine = { ...bookingDraftForEngine, ...slots, mode: 'modify' };
+          }
+        }
       }
       this.logger.log(
         `[chat.service] Booking lookup tenant=${tenantId} conv=${conversation.id} contact=${contact.id} phone=${bookingLookupPhone ?? '(none)'} count=${rows.length}`,

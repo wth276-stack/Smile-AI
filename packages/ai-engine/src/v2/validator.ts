@@ -65,9 +65,17 @@ export function mergeBookingDraft(
     return null;
   }
 
+  const combinedBookingId = orNull(llmDraft?.bookingId) ?? orNull(existing?.bookingId) ?? null;
+  const modeFromLlm = orMode(llmDraft?.mode);
+  const modeFromExisting = orMode(existing?.mode);
+  // Preserve explicit LLM/DB mode; if bookingId is set but mode dropped (LLM quirk), default to
+  // modify so reschedule flows don't get misclassified as new-booking SUBMIT/CONFIRM.
+  const modeResolved =
+    modeFromLlm ?? modeFromExisting ?? (combinedBookingId ? 'modify' : null);
+
   return {
-    bookingId: orNull(llmDraft?.bookingId) ?? orNull(existing?.bookingId) ?? null,
-    mode: orMode(llmDraft?.mode) ?? orMode(existing?.mode) ?? null,
+    bookingId: combinedBookingId,
+    mode: modeResolved,
     serviceName: orNull(llmDraft?.serviceName) ?? orNull(existing?.serviceName) ?? null,
     serviceDisplayName:
       orNull(llmDraft?.serviceDisplayName) ?? orNull(existing?.serviceDisplayName) ?? null,
@@ -110,8 +118,11 @@ function replyHasConfirmationSummary(reply: string): boolean {
     return true;
   }
 
-  // Booking-specific field markers (NOT price)
-  const hasService = /hifu|療程|facial|套餐|服務[:：]/i.test(r);
+  // Booking-specific field markers (NOT price). Domain-agnostic: list/label lines, not vertical-specific product names.
+  const hasService =
+    /服務[：:]|^[-•*]\s*服務\b|套餐[：:]|項目[：:]|療程[：:]|service[：:]|class[：:]|session[：:]|treatment[：:]/i.test(
+      r,
+    );
   const hasDate = /\d{4}-\d{2}-\d{2}|\d{1,2}月\d{1,2}日|星期[一二三四五六日]/i.test(r);
   const hasTime = /\d{1,2}:\d{2}|\d{1,2}點/i.test(r);
   const hasName = /客戶姓名|姓名[:：]/i.test(r);

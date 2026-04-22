@@ -256,6 +256,12 @@ export function applyConfirmationBoundaryPostProcess(
     return { reply, action: a, usedTemplate: false };
   }
 
+  // Reschedule / cancel: never swap in the single-booking deterministic template (original vs proposed
+  // lives in the model reply; replacing it breaks modify summary + pending state).
+  if (mergedDraft.mode === 'modify' || mergedDraft.mode === 'cancel') {
+    return { reply, action, usedTemplate: false };
+  }
+
   if (
     action === 'SUBMIT_BOOKING' ||
     action === 'MODIFY_BOOKING' ||

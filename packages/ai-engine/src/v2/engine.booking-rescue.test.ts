@@ -3,6 +3,7 @@ import type { BookingDraft, KnowledgeChunk } from '../types';
 import { mergeBookingDraft, validateOutput } from './validator';
 import { getMissingBookingSlots, bookingDraftHasAllRequiredSlots } from '../booking-state';
 import { buildServiceCatalog, buildServiceTaxonomy, detectServiceSwitch } from '../service-matcher';
+import { applyConfirmationBoundaryPostProcess } from './confirmation-boundary';
 
 // ── Test the core logic flows without OpenAI dependency ──
 
@@ -432,5 +433,97 @@ describe('WhatsApp booking flow regression', () => {
       expect(result).not.toBeNull();
       expect(result!.type).toBe('clear');
     });
+  });
+});
+
+describe('Modify / reschedule flow (v2)', () => {
+  const kbChunks = [
+    { documentId: 'svc-hifu', title: 'HIFU 高強度聚焦超聲波', content: 'HIFU 療程', score: 1, aliases: ['hifu'] },
+  ];
+
+  const modifyDraft: BookingDraft = {
+    bookingId: 'bk-1',
+    mode: 'modify',
+    serviceName: 'HIFU 高強度聚焦超聲波',
+    serviceDisplayName: 'HIFU 高強度聚焦超聲波',
+    date: '2026-04-30',
+    time: '10:00',
+    customerName: 'Yuki',
+    phone: '64991498',
+  };
+
+  it('mergeBookingDraft: bookingId without mode defaults to modify', () => {
+    const base: BookingDraft = {
+      ...EMPTY_DRAFT,
+      bookingId: 'x1',
+    };
+    const merged = mergeBookingDraft(base, { date: '2026-05-01' });
+    expect(merged.mode).toBe('modify');
+    expect(merged.bookingId).toBe('x1');
+  });
+
+  it('existing booking + user affirms modify summary → MODIFY_BOOKING, not SUBMIT', () => {
+    const v = validateOutput(
+      {
+        replyText: '好的',
+        intents: ['BOOKING_CHANGE'],
+        newSlots: {},
+        action: 'SUBMIT_BOOKING',
+      },
+      {
+        currentDraft: modifyDraft,
+        currentMessage: '可以',
+        knowledgeChunks: kbChunks,
+        confirmationPending: true,
+      },
+    );
+    expect(v.action).toBe('MODIFY_BOOKING');
+  });
+
+  it('modify summary correction → COLLECT, not new-booking SUBMIT', () => {
+    const v = validateOutput(
+      {
+        replyText: '收到',
+        intents: ['BOOKING_CHANGE'],
+        newSlots: { date: '2026-05-24', time: '10:00' },
+        action: 'CONFIRM_BOOKING',
+      },
+      {
+        currentDraft: modifyDraft,
+        currentMessage: '唔啱，我係約24號10am',
+        knowledgeChunks: kbChunks,
+        confirmationPending: true,
+      },
+    );
+    expect(v.action).toBe('COLLECT_BOOKING');
+  });
+
+  it('applyConfirmationBoundary: modify draft never gets replaced by single new-booking template', () => {
+    const r = applyConfirmationBoundaryPostProcess(
+      modifyDraft,
+      '原預約 4/30 10:00 → 新時間 5/1 11:00，請確認是否改期？',
+      'REPLY',
+      { confirmationPending: true, currentMessage: '可以' },
+    );
+    expect(r.reply).toContain('原預約');
+    expect(r.usedTemplate).toBe(false);
+  });
+
+  it('new booking affirmation path: pending + full draft + 好 → still SUBMIT_BOOKING', () => {
+    const v = validateOutput(
+      {
+        replyText: '好的',
+        intents: ['BOOKING_REQUEST'],
+        newSlots: {},
+        action: 'REPLY',
+      },
+      {
+        currentDraft: FULL_DRAFT,
+        currentMessage: '好',
+        knowledgeChunks: kbChunks,
+        confirmationPending: true,
+      },
+    );
+    expect(v.action).toBe('SUBMIT_BOOKING');
   });
 });
