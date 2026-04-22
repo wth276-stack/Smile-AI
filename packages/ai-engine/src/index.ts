@@ -60,7 +60,7 @@ export { verifyLlmValidationRegression } from './llm-validate';
 export { verifyLlmMergeRegression } from './llm-regression';
 export { verifyLlmSemanticRegression } from './llm-semantic-check';
 export { resolveAiEngineMode, shouldAttemptLlmPlanner, type AiEngineMode } from './llm-config';
-export { isConfirmationMessage } from './v2/validator';
+export { isConfirmationMessage, replyHasConfirmationSummary } from './v2/validator';
 export { useLlmFirstPrototype, useThinCoreV1 } from './llm-config';
 export { runThinCoreV1 } from './thin-core-v1/thin-run';
 export type { LlmPlannerOutput, LlmPlannerIntent } from './llm-contract';

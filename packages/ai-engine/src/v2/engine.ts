@@ -19,6 +19,7 @@ import {
   validateOutput,
   isConfirmationMessage,
   DUPLICATE_AFFIRM_GUARD_ISSUE,
+  replyHasConfirmationSummary,
 } from './validator';
 import { applyConfirmationBoundaryPostProcess } from './confirmation-boundary';
 import {
@@ -861,10 +862,13 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
       // These don't need slot validation — bookingId is validated by validator.ts
     }
 
-    // ── Robust guard: strip premature confirmation when required slots missing (e.g. LLM said COLLECT_BOOKING but asked 確認嗎) ──
+    // ── Robust guard: no confirmation-summary wording until all required slots exist ──
     let finalReply = validated.validatedReply;
     {
-      if (missingSlots.length > 0 && /確認嗎|確認？|確認\?|confirm/i.test(finalReply)) {
+      const prematureConfirm =
+        missingSlots.length > 0 &&
+        (/確認嗎|確認？|確認\?|confirm/i.test(finalReply) || replyHasConfirmationSummary(finalReply));
+      if (prematureConfirm) {
         const labelMap: Record<string, string> = {
           serviceName: '服務',
           date: '日期',
@@ -873,12 +877,16 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
           phone: '電話',
         };
         const missingLabels = missingSlots.map((k) => labelMap[k] || k).join('、');
-        finalReply = finalReply
-          .replace(/[。，,]?\s*確認嗎[？?]?/g, '')
-          .replace(/[。，,]?\s*OK嗎[？?]?/gi, '')
-          .replace(/[。，,]?\s*確認[？?]/g, '')
-          .trim();
-        if (!finalReply) finalReply = '收到！';
+        if (replyHasConfirmationSummary(finalReply)) {
+          finalReply = '收到！';
+        } else {
+          finalReply = finalReply
+            .replace(/[。，,]?\s*確認嗎[？?]?/g, '')
+            .replace(/[。，,]?\s*OK嗎[？?]?/gi, '')
+            .replace(/[。，,]?\s*確認[？?]/g, '')
+            .trim();
+          if (!finalReply) finalReply = '收到！';
+        }
         finalReply += ` 請提供你嘅${missingLabels}。`;
         finalAction = 'COLLECT_BOOKING';
         console.log('[v2/engine] Guard: stripped premature confirmation, missing:', missingLabels);

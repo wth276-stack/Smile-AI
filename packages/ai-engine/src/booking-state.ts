@@ -268,6 +268,36 @@ function extractBareDayHao(msg: string, ref: Date): string | null {
 
 // ── Time extraction ───────────────────────────────────────────────────────────
 
+/** Last match wins (e.g. "三點改五點" → 17:00). Handles 十點 / 十一點 / 三點半 (no Arabic digits). */
+function extractZhNumeralHourTime(msg: string): string | null {
+  const re = /(十二|十一|十|兩|一|二|三|四|五|六|七|八|九)點(半)?/g;
+  let m: RegExpExecArray | null;
+  let last: RegExpExecArray | null = null;
+  while ((m = re.exec(msg)) !== null) last = m;
+  if (!last) return null;
+  const tok = last[1];
+  const half = !!last[2];
+  const map: Record<string, number> = {
+    一: 1,
+    二: 2,
+    兩: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+    十: 10,
+    十一: 11,
+    十二: 12,
+  };
+  const hour = map[tok];
+  if (hour === undefined || hour < 0 || hour > 23) return null;
+  const minute = half ? 30 : 0;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
 function extractTime(msg: string): string | null {
   const enMatch = msg.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
   if (enMatch) {
@@ -308,6 +338,9 @@ function extractTime(msg: string): string | null {
       return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
   }
 
+  const zhNumeral = extractZhNumeralHourTime(msg);
+  if (zhNumeral) return zhNumeral;
+
   const zhBare = msg.match(/(\d{1,2})[點:時]半?(\d{1,2})?/);
   if (zhBare) {
     const hour = parseInt(zhBare[1], 10);
@@ -345,6 +378,15 @@ function takeLeadingPersonalName(slice: string): string | null {
 }
 
 function extractCustomerName(msg: string): string | null {
+  /** "Gigi，星期日十點" — leading Latin / common display name before comma */
+  const leadComma = msg.match(
+    /^\s*([a-zA-Z][a-zA-Z'’.\-]*(?:\s+[a-zA-Z][a-zA-Z'’.\-]*)*)\s*[，,]\s*/,
+  );
+  if (leadComma) {
+    const n = leadComma[1]!.trim();
+    if (n.length >= 2) return n;
+  }
+
   const m = msg.match(/我(叫|係|是|姓)\s*/);
   if (m && m.index !== undefined) {
     const from = m.index + m[0].length;

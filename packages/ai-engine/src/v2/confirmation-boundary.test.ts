@@ -47,4 +47,20 @@ describe('applyConfirmationBoundaryPostProcess', () => {
     expect(out.reply).toBe(shortReply);
     expect(out.action).toBe('CONFIRM_BOOKING');
   });
+
+  it('incomplete draft never injects confirmation template (no confirm-style summary path)', () => {
+    const partial: BookingDraft = {
+      ...fullDraft,
+      time: null,
+      customerName: null,
+    };
+    const summaryLike =
+      '幫你確認一下預約資料：服務 Eye Treatment，星期日，十點，請問以上資料正確嗎？';
+    const out = applyConfirmationBoundaryPostProcess(partial, summaryLike, 'CONFIRM_BOOKING', {
+      confirmationPending: false,
+    });
+    expect(out.usedTemplate).toBe(false);
+    expect(out.reply).toBe(summaryLike);
+    expect(out.action).toBe('CONFIRM_BOOKING');
+  });
 });

@@ -109,7 +109,7 @@ interface LlmRawOutput {
  * fields (service, date, time, name, phone) — indicators of a summary presented
  * for the customer to confirm. Price alone is NOT a booking summary marker.
  */
-function replyHasConfirmationSummary(reply: string): boolean {
+export function replyHasConfirmationSummary(reply: string): boolean {
   if (!reply) return false;
   const r = reply.toLowerCase();
 
@@ -124,7 +124,8 @@ function replyHasConfirmationSummary(reply: string): boolean {
       r,
     );
   const hasDate = /\d{4}-\d{2}-\d{2}|\d{1,2}月\d{1,2}日|星期[一二三四五六日]/i.test(r);
-  const hasTime = /\d{1,2}:\d{2}|\d{1,2}點/i.test(r);
+  const hasTime =
+    /\d{1,2}:\d{2}|\d{1,2}點|[一二兩三四五六七八九十]+點/i.test(r);
   const hasName = /客戶姓名|姓名[:：]/i.test(r);
   const hasPhone = /電話[:：]|\b\d{8}\b/i.test(r);
 
