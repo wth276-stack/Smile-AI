@@ -1,5 +1,5 @@
 /**
- * Smoke: runAiEngine() must route to V2 when USE_V2_ENGINE=true (protects future V1 removal).
+ * Smoke: runAiEngine() routes to V2 by default (slot gate, etc.); opt out with USE_V1_ENGINE=1.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AiEngineInput } from './types';
@@ -25,18 +25,23 @@ vi.mock('./orchestrator', () => ({
 import { runAiEngine } from './index';
 
 describe('runAiEngine routing', () => {
-  const prev = process.env.USE_V2_ENGINE;
+  const prevV1 = process.env.USE_V1_ENGINE;
+  const prevV2 = process.env.USE_V2_ENGINE;
 
   beforeEach(() => {
     runAiEngineV2Mock.mockClear();
-    process.env.USE_V2_ENGINE = 'true';
+    delete process.env.USE_V1_ENGINE;
+    delete process.env.USE_V2_ENGINE;
   });
 
   afterEach(() => {
-    process.env.USE_V2_ENGINE = prev;
+    if (prevV1 === undefined) delete process.env.USE_V1_ENGINE;
+    else process.env.USE_V1_ENGINE = prevV1;
+    if (prevV2 === undefined) delete process.env.USE_V2_ENGINE;
+    else process.env.USE_V2_ENGINE = prevV2;
   });
 
-  it('calls runAiEngineV2 when USE_V2_ENGINE=true', async () => {
+  it('defaults to runAiEngineV2 when no engine env is set (production path)', async () => {
     const input: AiEngineInput = {
       tenant: { id: 't', plan: 'STARTER', settings: {} },
       contact: { id: 'c', tags: [] },

@@ -42,6 +42,14 @@ function debugLog(...args: unknown[]): void {
   }
 }
 
+/** Gated: set ATS_DEBUG_BOOKING_PATH=1 for live path tracing (slot gate, actions). */
+function traceBookingPath(tag: string, payload: Record<string, unknown>): void {
+  if (process.env.ATS_DEBUG_BOOKING_PATH !== '1' && process.env.ATS_DEBUG_BOOKING_PATH !== 'true') {
+    return;
+  }
+  console.warn(`[v2/engine trace] ${tag}`, JSON.stringify(payload));
+}
+
 /**
  * Second-affirm / stray path: after CREATE (or when confirmationPending is false), the model may
  * return REPLY_ONLY / REPLY / CONFIRM_BOOKING instead of SUBMIT_BOOKING — duplicate-affirm guard
@@ -905,7 +913,16 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
 
     let slotAvailabilityBlocked = false;
     {
-      if (shouldRunSlotAvailabilityGate(finalAction, finalMergedDraft)) {
+      const gateWouldRun = shouldRunSlotAvailabilityGate(finalAction, finalMergedDraft);
+      traceBookingPath('slotGate.check', {
+        finalActionPreGate: finalAction,
+        mode: finalMergedDraft.mode ?? null,
+        gateWouldRun,
+        date: String(finalMergedDraft.date ?? '').trim() || null,
+        time: String(finalMergedDraft.time ?? '').trim() || null,
+        draftNameSet: Boolean(finalMergedDraft.customerName?.trim()),
+      });
+      if (gateWouldRun) {
         const policy = buildSlotPolicyFromTenantSettings(input.tenant.settings ?? {});
         const gate = validateBookingSlot({
           date: String(finalMergedDraft.date ?? '').trim(),
@@ -918,6 +935,13 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
           calendarAvailability: null,
           now: new Date(),
         });
+        traceBookingPath('slotGate.result', {
+          allowed: gate.allowed,
+          code: gate.code,
+          reason: gate.reason?.slice(0, 200) ?? '',
+          timeZone: policy.timeZone,
+          hasBusinessHours: policy.businessHours != null,
+        });
         if (!gate.allowed) {
           slotAvailabilityBlocked = true;
           finalAction = 'COLLECT_BOOKING';
@@ -925,6 +949,10 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
           finalReply = [gate.reason.trim(), extra].filter(Boolean).join(' ');
           console.warn('[v2/engine] Slot availability gate blocked:', gate.code);
         }
+        traceBookingPath('slotGate.after', {
+          slotAvailabilityBlocked,
+          finalActionPostGate: finalAction,
+        });
       }
     }
 
@@ -962,6 +990,12 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     };
     (result as any)._rawLlmJson = rawText;
     (result as any)._v2Action = finalAction;
+    traceBookingPath('return', {
+      intent: validated.intent,
+      finalV2Action: finalAction,
+      legacyAction: finalLegacyAction,
+      slotAvailabilityBlocked,
+    });
     return result;
   } catch (err: any) {
     if (err?.code === 'ETIMEDOUT' || err?.message?.includes('timeout') || err?.type === 'request-timeout') {

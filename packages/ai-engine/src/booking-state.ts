@@ -114,7 +114,7 @@ export function provisionalCustomerNameFromExistingBookings(
   if (!existing?.length) return null;
   if (draft.bookingId) {
     const m = existing.find((b) => b.id === draft.bookingId);
-    return m?.customerName?.trim() ?? null;
+    if (m?.customerName?.trim()) return m.customerName.trim();
   }
   if (existing.length === 1) return existing[0]!.customerName?.trim() ?? null;
   return null;

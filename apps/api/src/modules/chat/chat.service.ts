@@ -219,8 +219,6 @@ export class ChatService {
       await mergeConversationMetadata(conversation.id, { modifyCancelFlow: true });
     }
 
-    const phoneForLookup = (bookingDraft?.phone?.trim() || extracted.phone?.trim() || '').trim();
-
     /** 改期／取消 flow：一旦進入 modifyCancelFlow（或相關 intent），必跑 lookup；有電話用電話，冇電話用 conversation contactId。 */
     const shouldLookupExisting =
       modifyCancelFlow ||
@@ -243,6 +241,8 @@ export class ChatService {
     const waPhone = waIdForPhone
       ? waIdForPhone.replace(/^852/, '').replace(/[^0-9]/g, '') || waIdForPhone
       : null;
+
+    const phoneForLookup = (bookingDraft?.phone?.trim() || extracted.phone?.trim() || waPhone || '').trim();
 
     let bookingDraftForEngine: BookingDraft = {
       ...(bookingDraft ?? emptyDraftBase),
@@ -314,6 +314,23 @@ export class ChatService {
       this.logger.log(
         `[chat.service] Booking lookup tenant=${tenantId} conv=${conversation.id} contact=${contact.id} phone=${bookingLookupPhone ?? '(none)'} count=${rows.length}`,
       );
+    } else {
+      // Live path: modify keywords absent — still load contact-scoped upcoming rows so
+      // provisionalCustomerNameFromExistingBookings can hydrate (else existingBookings stayed undefined).
+      const rows = await this.lookupUpcomingBookings(tenantId, null, contact.id);
+      if (rows.length > 0) {
+        existingBookings = rows.map((b) => ({
+          id: b.id,
+          serviceName: b.serviceName,
+          startTime: b.startTime,
+          endTime: b.endTime,
+          status: b.status,
+          customerName: b.customerName,
+        }));
+        this.logger.log(
+          `[chat.service] Contact booking lookup (hydration) tenant=${tenantId} conv=${conversation.id} contact=${contact.id} count=${rows.length}`,
+        );
+      }
     }
 
     const rememberedName = provisionalCustomerNameFromExistingBookings(
@@ -322,6 +339,19 @@ export class ChatService {
     );
     if (rememberedName && !bookingDraftForEngine.customerName?.trim()) {
       bookingDraftForEngine = { ...bookingDraftForEngine, customerName: rememberedName };
+    }
+    if (
+      process.env.ATS_DEBUG_BOOKING_PATH === '1' ||
+      process.env.ATS_DEBUG_BOOKING_PATH === 'true'
+    ) {
+      this.logger.warn(
+        `[chat.service trace] nameHydration provisionalCustomerNameFromExistingBookings ` +
+          `returned=${rememberedName ?? 'null'} ` +
+          `draftName=${bookingDraftForEngine.customerName ?? 'null'} ` +
+          `existingBookingsCount=${existingBookings?.length ?? 0} ` +
+          `shouldLookupExisting=${shouldLookupExisting} ` +
+          `bookingId=${bookingDraftForEngine.bookingId ?? 'null'}`,
+      );
     }
 
     const knowledge = await this.knowledgeRetriever.retrieveForMessage(
@@ -341,6 +371,15 @@ export class ChatService {
     this.logger.log(
       `[KB retrieve] tenant=${tenantId} conv=${conversation.id} len=${knowledge.length} titles=${JSON.stringify(kbTitles)}`,
     );
+
+    if (
+      process.env.ATS_DEBUG_BOOKING_PATH === '1' ||
+      process.env.ATS_DEBUG_BOOKING_PATH === 'true'
+    ) {
+      this.logger.warn(
+        `[chat.service trace] runAiEngine input draft.customerName=${bookingDraftForEngine.customerName ?? 'null'}`,
+      );
+    }
 
     const aiInput: AiEngineInput = {
       tenant: {
@@ -457,8 +496,11 @@ export class ChatService {
 
     // Decision Engine v1: Log stage and signals for debugging
     const sig = result.signals as any;
+    const v2a = (result as AiEngineResult & { _v2Action?: string })._v2Action;
     this.logger.log(
       `Chat processed: tenant=${tenantId} conv=${conversation.id} ` +
+      `legacyAction=${String(sig?.action ?? 'unknown')} ` +
+      `v2Action=${v2a ?? 'unknown'} ` +
       `mode=${sig.conversationMode ?? 'unknown'} ` +
       `stage=${sig.conversationStage ?? 'unknown'} ` +
       `emotion=${sig.customerEmotion ?? 'unknown'} ` +

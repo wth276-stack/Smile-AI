@@ -3,8 +3,17 @@ import type { AiEngineInput, AiEngineResult } from './types';
 import { runAiEngine as runAiEngineV1 } from './orchestrator';
 import { runAiEngineV2 } from './v2/engine';
 
+/** V2 is the default (slot gate, confirmation boundary, etc.). Opt out with USE_V1_ENGINE=1. */
+function shouldUseV2Engine(): boolean {
+  const v1 = process.env.USE_V1_ENGINE === '1' || process.env.USE_V1_ENGINE === 'true';
+  if (v1) return false;
+  const v2Off = process.env.USE_V2_ENGINE === '0' || process.env.USE_V2_ENGINE === 'false';
+  if (v2Off) return false;
+  return true;
+}
+
 export async function runAiEngine(input: AiEngineInput): Promise<AiEngineResult> {
-  const useV2 = process.env.USE_V2_ENGINE === '1' || process.env.USE_V2_ENGINE === 'true';
+  const useV2 = shouldUseV2Engine();
   if (process.env.AI_ENGINE_V2_DEBUG === '1' || process.env.AI_ENGINE_V2_DEBUG === 'true') {
     console.log(`[AI-ENGINE] Using ${useV2 ? 'V2' : 'V1'} engine`);
   }
