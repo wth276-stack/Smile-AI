@@ -3,6 +3,7 @@ import { bookingDraftHasAllRequiredSlots } from '../booking-state';
 import { buildServiceCatalog, matchService } from '../service-matcher';
 import { isBookingConfirmationRejectionMessage } from './booking-confirmation-rejection';
 import { getHKTToday } from './date-utils';
+import { applyReplyGrounding } from './reply-grounding';
 
 /** Issue string when SUBMIT_BOOKING is coerced to REPLY_ONLY (duplicate affirm / no confirmation pending). */
 export const DUPLICATE_AFFIRM_GUARD_ISSUE =
@@ -89,6 +90,8 @@ export function mergeBookingDraft(
 interface ValidateContext {
   currentDraft?: BookingDraft;
   knowledgeChunks: KnowledgeChunk[];
+  /** Full-tenant service titles; widens reply grounding allowlist beyond retrieved chunks. */
+  authorisedServiceCatalog?: string[];
   conversationHistory?: Array<{ role: 'customer' | 'assistant'; content: string }>;
   currentMessage?: string;
   /** Set to true when the previous turn's action was CONFIRM_BOOKING. */
@@ -448,6 +451,16 @@ export function validateOutput(
   ) {
     action = 'REPLY_ONLY';
     issues.push(DUPLICATE_AFFIRM_GUARD_ISSUE);
+  }
+
+  const grounded = applyReplyGrounding(reply, ctx.knowledgeChunks, {
+    authorisedServiceCatalog: ctx.authorisedServiceCatalog,
+  });
+  if (grounded.rewritten) {
+    reply = grounded.reply;
+    for (const g of grounded.issues) {
+      issues.push(g);
+    }
   }
 
   return {

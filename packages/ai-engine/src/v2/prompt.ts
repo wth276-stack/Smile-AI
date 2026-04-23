@@ -1,5 +1,6 @@
 import type { PromptContext, BookingDraft, KnowledgeChunk } from './types';
 import { formatDateHKYmd, getHKTJsWeekday, getHKTToday } from './date-utils';
+import { formatAuthorisedServiceLine } from './reply-grounding';
 
 const FAQ_MAX_ITEMS = 8;
 const FAQ_ANSWER_MAX = 220;
@@ -302,6 +303,10 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   const businessType = tp?.businessType ?? 'business';
   const kbDefaults = resolveKbDefaults(businessType);
   const kb = formatKnowledgeChunks(ctx.knowledgeChunks, kbDefaults);
+  const authorisedServices = formatAuthorisedServiceLine(
+    ctx.authorisedServiceCatalog,
+    ctx.knowledgeChunks,
+  );
   const draft = formatDraftState(ctx.currentDraft);
 
   let bookingsSection = '';
@@ -358,6 +363,9 @@ Today: ${todayStr} (${wdEn})${greeting ? `\n${greeting}` : ''}
 
 ## Booking State
 ${draft}${bookingsSection}
+
+## 店內可提供的服務項目（只可向客戶介紹、報價或承諾以下服務，以及再下方已列明嘅細節；如客戶問及以下未有嘅項目，應禮貌說明暫未提供，不要自創項目或價錢。)
+${authorisedServices}
 
 ## Knowledge Base
 ${kb}

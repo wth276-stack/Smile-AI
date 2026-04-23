@@ -86,7 +86,11 @@ export async function applyIndustrySeedToTenant(
         unsuitable: undefined,
         precaution: svc.caution,
         price: svc.price,
-        aliases: [svc.name, svc.displayName],
+        aliases: [
+          svc.name,
+          svc.displayName,
+          ...(svc.extraAliases ?? []),
+        ],
         faqItems: svc.faq.map((f) => ({ question: f.q, answer: f.a })),
       },
     });

@@ -101,6 +101,13 @@ function generateAliases(name: string): string[] {
     }
     addChineseTrigrams(chinese, aliases);
   }
+  // 瑜伽 vs 珈 / 冮 variant — common in user input; treat as the same when matching
+  if (chinese.includes('瑜伽')) {
+    aliases.add(chinese.replace(/瑜伽/g, '瑜珈'));
+  }
+  if (chinese.includes('瑜珈')) {
+    aliases.add(chinese.replace(/瑜珈/g, '瑜伽'));
+  }
 
   addEnglishPluralVariants(name, aliases);
 

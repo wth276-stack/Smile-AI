@@ -1,6 +1,8 @@
 export interface IndustryService {
   name: string;
   displayName: string;
+  /** Merged into KnowledgeDocument.aliases for matching (e.g. 瑜伽 vs 瑜珈). */
+  extraAliases?: string[];
   price: string;
   duration: string;
   description: string;
@@ -377,6 +379,21 @@ export const industrySeedData: Record<string, IndustrySeed> = {
       {
         name: 'private-yoga',
         displayName: '私人瑜珈課',
+        extraAliases: [
+          '瑜伽',
+          '瑜珈',
+          '私人瑜伽',
+          '私人瑜珈',
+          '私人瑜伽課',
+          '私人瑜珈課',
+          '試堂',
+          '體驗',
+          '體驗堂',
+          '首堂',
+          '半價',
+          '半價體驗',
+          '第一堂半價',
+        ],
         price: '$600/堂 → 首堂體驗價 $300',
         duration: '60 分鐘',
         description: '一對一瑜珈指導，根據你嘅身體狀況度身設計課程',

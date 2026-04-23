@@ -63,6 +63,11 @@ export interface AiEngineInput {
   messages: AiMessageContext[];
   currentMessage: string;
   knowledge: KnowledgeChunk[];
+  /**
+   * Active SERVICE document titles for this tenant (full catalog, not retrieval-dependent).
+   * Used for prompt allowlist and reply grounding; optional for backward compatibility.
+   */
+  authorisedServiceCatalog?: string[];
   bookingDraft?: BookingDraft;
   existingBookings?: Array<{
     id: string;

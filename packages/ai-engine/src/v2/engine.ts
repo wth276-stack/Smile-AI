@@ -221,6 +221,7 @@ function buildPromptContext(input: AiEngineInput): PromptContext {
   return {
     tenantProfile: tenantProfileFromSettings(input.tenant.settings ?? {}),
     knowledgeChunks: input.knowledge,
+    authorisedServiceCatalog: input.authorisedServiceCatalog,
     conversationHistory: trimmed,
     currentMessage: input.currentMessage,
     currentDraft: input.bookingDraft ?? { ...EMPTY_DRAFT },

@@ -47,6 +47,8 @@ export interface TenantProfile {
 export interface PromptContext {
   tenantProfile?: TenantProfile;
   knowledgeChunks: KnowledgeChunk[];
+  /** Full-tenant SERVICE titles when provided by the API; not retrieval-dependent. */
+  authorisedServiceCatalog?: string[];
   conversationHistory: Array<{ role: 'customer' | 'assistant'; content: string }>;
   currentMessage: string;
   currentDraft: BookingDraft;

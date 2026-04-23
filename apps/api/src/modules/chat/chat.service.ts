@@ -6,6 +6,7 @@ import { ContactsService } from '../contacts/contacts.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import { KnowledgeRetrieverService } from './knowledge-retriever.service';
 import { ChatPersistenceService } from './chat-persistence.service';
+import { KnowledgeBaseService } from '../knowledge-base/knowledge-base.service';
 import {
   bookingDraftHasAllRequiredSlots,
   emptyDraft,
@@ -43,6 +44,7 @@ export class ChatService {
     private readonly contacts: ContactsService,
     private readonly conversations: ConversationsService,
     private readonly knowledgeRetriever: KnowledgeRetrieverService,
+    private readonly knowledgeBase: KnowledgeBaseService,
     private readonly persistence: ChatPersistenceService,
   ) {}
 
@@ -387,11 +389,14 @@ export class ChatService {
       );
     }
 
-    const knowledge = await this.knowledgeRetriever.retrieveForMessage(
-      tenantId,
-      message,
-      bookingDraftForEngine,
-    );
+    const [knowledge, authorisedServiceCatalog] = await Promise.all([
+      this.knowledgeRetriever.retrieveForMessage(
+        tenantId,
+        message,
+        bookingDraftForEngine,
+      ),
+      this.knowledgeBase.listActiveServiceDisplayNames(tenantId),
+    ]);
 
     console.log(
       '[KB DEBUG] knowledge.length:',
@@ -437,6 +442,7 @@ export class ChatService {
       })),
       currentMessage: message,
       knowledge,
+      ...(authorisedServiceCatalog.length > 0 ? { authorisedServiceCatalog } : {}),
       bookingDraft: bookingDraftForEngine,
       ...(existingBookings !== undefined
         ? {
