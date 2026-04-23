@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { BookingDraft, KnowledgeChunk } from '../types';
 import { mergeBookingDraft, validateOutput } from './validator';
 import { getMissingBookingSlots, bookingDraftHasAllRequiredSlots } from '../booking-state';
-import { buildServiceCatalog, buildServiceTaxonomy, detectServiceSwitch } from '../service-matcher';
+import { detectServiceOverride } from './engine';
 import { applyConfirmationBoundaryPostProcess } from './confirmation-boundary';
 
 // ── Test the core logic flows without OpenAI dependency ──
@@ -288,8 +288,7 @@ describe('WhatsApp booking flow regression', () => {
     });
   });
 
-  describe('Service switch detection', () => {
-    // Catalog with Facial family (3 services) and unique HIFU
+  describe('Service override detection (matchService-only)', () => {
     const switchKB: KnowledgeChunk[] = [
       {
         documentId: 'hifu',
@@ -317,9 +316,6 @@ describe('WhatsApp booking flow regression', () => {
       },
     ];
 
-    const catalog = buildServiceCatalog(switchKB);
-    const taxonomy = buildServiceTaxonomy(catalog);
-
     const hifuDraft: BookingDraft = {
       bookingId: null, mode: null,
       serviceName: 'HIFU 高強度聚焦超聲波',
@@ -335,109 +331,105 @@ describe('WhatsApp booking flow regression', () => {
       date: null, time: null, customerName: null, phone: null,
     };
 
-    it('generic family reference → clear (user says "FACIAL" while drafting HIFU)', () => {
-      const result = detectServiceSwitch(
-        '我想預約FACIAL', hifuDraft, {}, catalog, taxonomy,
-      );
+    it('ambiguous family → clear (user says "FACIAL" while drafting HIFU)', () => {
+      const result = detectServiceOverride('我想預約FACIAL', hifuDraft, {}, switchKB);
       expect(result).not.toBeNull();
-      expect(result!.type).toBe('clear');
+      expect(result!.action).toBe('clear');
     });
 
     it('specific item → replace (user says "深層清潔 Facial" while drafting HIFU)', () => {
-      const result = detectServiceSwitch(
-        '我想做深層清潔 Facial', hifuDraft, {}, catalog, taxonomy,
-      );
+      const result = detectServiceOverride('我想做深層清潔 Facial', hifuDraft, {}, switchKB);
       expect(result).not.toBeNull();
-      expect(result!.type).toBe('replace');
-      if (result!.type === 'replace') {
-        expect(result!.serviceDisplayName).toBe('深層清潔 Facial');
-      }
+      expect(result!.action).toBe('replace');
+      expect(result!.serviceDisplayName).toBe('深層清潔 Facial');
     });
 
     it('unique service → replace (user says "HIFU" while drafting Facial)', () => {
-      const result = detectServiceSwitch(
-        '唔係，我想做HIFU', facialDraft, {}, catalog, taxonomy,
-      );
+      const result = detectServiceOverride('唔係，我想做HIFU', facialDraft, {}, switchKB);
       expect(result).not.toBeNull();
-      expect(result!.type).toBe('replace');
-      if (result!.type === 'replace') {
-        expect(result!.serviceDisplayName).toBe('HIFU 高強度聚焦超聲波');
-      }
+      expect(result!.action).toBe('replace');
+      expect(result!.serviceDisplayName).toBe('HIFU 高強度聚焦超聲波');
     });
 
     it('same service → null (user asks "HIFU幾多錢" while drafting HIFU)', () => {
-      const result = detectServiceSwitch(
-        'HIFU幾多錢', hifuDraft, {}, catalog, taxonomy,
-      );
+      const result = detectServiceOverride('HIFU幾多錢', hifuDraft, {}, switchKB);
       expect(result).toBeNull();
     });
 
     it('no service mention → null (user says "你好")', () => {
-      const result = detectServiceSwitch(
-        '你好', hifuDraft, {}, catalog, taxonomy,
-      );
+      const result = detectServiceOverride('你好', hifuDraft, {}, switchKB);
       expect(result).toBeNull();
     });
 
-    it('LLM extracted service + user category text → clear (override LLM pick)', () => {
-      // LLM picked "深層清潔 Facial" but user only said "FACIAL" (category)
+    it('LLM already extracted different service → return null (let merge handle it)', () => {
       const newSlots: Partial<BookingDraft> = {
         serviceName: '深層清潔 Facial',
         serviceDisplayName: '深層清潔 Facial',
       };
-      const result = detectServiceSwitch(
-        '我想預約FACIAL', hifuDraft, newSlots, catalog, taxonomy,
-      );
+      const result = detectServiceOverride('我想做深層清潔 Facial', hifuDraft, newSlots, switchKB);
+      expect(result).toBeNull();
+    });
+
+    it('LLM extracted same service + user ambiguous family → clear', () => {
+      const newSlots: Partial<BookingDraft> = {
+        serviceName: 'HIFU 高強度聚焦超聲波',
+        serviceDisplayName: 'HIFU 高強度聚焦超聲波',
+      };
+      const result = detectServiceOverride('我想預約FACIAL', hifuDraft, newSlots, switchKB);
       expect(result).not.toBeNull();
-      expect(result!.type).toBe('clear');
+      expect(result!.action).toBe('clear');
+    });
+
+    it('confirmation boundary does NOT re-upgrade after service override', () => {
+      const override = detectServiceOverride('我想預約FACIAL', hifuDraft, {}, switchKB);
+      expect(override).not.toBeNull();
+      expect(override!.action).toBe('clear');
+
+      // With skipDeterministicConfirmationTemplate=true (serviceOverrideOccurred),
+      // boundary must NOT re-upgrade COLLECT_BOOKING back to CONFIRM_BOOKING.
+      const boundaryWithSkip = applyConfirmationBoundaryPostProcess(
+        hifuDraft,
+        '好的，已為你預約 HIFU，4月23號4點，請確認！',
+        'COLLECT_BOOKING',
+        { confirmationPending: false, currentMessage: '我想預約FACIAL', skipDeterministicConfirmationTemplate: true },
+      );
+      expect(boundaryWithSkip.action).toBe('COLLECT_BOOKING');
     });
   });
 
-  // Non-beauty fixture parity: shared English token "Class" (gyms, studios) + unique 1:1 product
-  describe('Service switch detection (group-class / fitness parity)', () => {
+  // Non-beauty parity: fitness domain
+  describe('Service override detection (fitness / group-class parity)', () => {
     const fitnessKB: KnowledgeChunk[] = [
       { documentId: 'pt', title: 'Personal Training 1:1', content: 'HKD 800', score: 1 },
       { documentId: 'hiit', title: 'HIIT Class', content: 'HKD 200', score: 1 },
       { documentId: 'spin', title: 'Spin Class', content: 'HKD 180', score: 1 },
       { documentId: 'yoga', title: 'Yoga Class', content: 'HKD 160', score: 1 },
     ];
-    const fitCatalog = buildServiceCatalog(fitnessKB);
-    const fitTax = buildServiceTaxonomy(fitCatalog);
 
     const ptDraft: BookingDraft = {
-      bookingId: null,
-      mode: null,
+      bookingId: null, mode: null,
       serviceName: 'Personal Training 1:1',
       serviceDisplayName: 'Personal Training 1:1',
-      date: '2026-04-23',
-      time: '16:00',
-      customerName: 'Alex',
-      phone: '91234567',
+      date: '2026-04-23', time: '16:00',
+      customerName: 'Alex', phone: '91234567',
     };
 
-    it('shared category "class" (ambiguous family) while drafting PT → clear', () => {
-      const result = detectServiceSwitch('我想預約Class', ptDraft, {}, fitCatalog, fitTax);
+    it('ambiguous "class" while drafting PT → clear', () => {
+      const result = detectServiceOverride('我想預約Class', ptDraft, {}, fitnessKB);
       expect(result).not.toBeNull();
-      expect(result!.type).toBe('clear');
+      expect(result!.action).toBe('clear');
     });
 
     it('specific "Spin Class" while drafting PT → replace', () => {
-      const result = detectServiceSwitch('我想做Spin Class', ptDraft, {}, fitCatalog, fitTax);
+      const result = detectServiceOverride('我想做Spin Class', ptDraft, {}, fitnessKB);
       expect(result).not.toBeNull();
-      expect(result!.type).toBe('replace');
-      if (result!.type === 'replace') {
-        expect(result!.serviceDisplayName).toBe('Spin Class');
-      }
+      expect(result!.action).toBe('replace');
+      expect(result!.serviceDisplayName).toBe('Spin Class');
     });
 
-    it('LLM pre-merged HIIT Class + user only category "class" → clear', () => {
-      const newSlots: Partial<BookingDraft> = {
-        serviceName: 'HIIT Class',
-        serviceDisplayName: 'HIIT Class',
-      };
-      const result = detectServiceSwitch('我想預約class', ptDraft, newSlots, fitCatalog, fitTax);
-      expect(result).not.toBeNull();
-      expect(result!.type).toBe('clear');
+    it('same service follow-up "Personal Training 幾多錢" → null', () => {
+      const result = detectServiceOverride('Personal Training 幾多錢', ptDraft, {}, fitnessKB);
+      expect(result).toBeNull();
     });
   });
 });

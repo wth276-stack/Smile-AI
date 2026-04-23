@@ -130,7 +130,7 @@ const API_TIMEOUT_MS = 60_000;
 
 import { formatDateHKYmd, getHKTJsWeekday, getHKTToday } from './date-utils';
 
-export { getHKTToday, formatDateHKYmd };
+export { getHKTToday, formatDateHKYmd, detectServiceOverride };
 
 const EMPTY_DRAFT: BookingDraft = {
   bookingId: null,
