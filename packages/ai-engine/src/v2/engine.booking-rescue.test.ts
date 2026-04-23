@@ -349,7 +349,9 @@ describe('WhatsApp booking flow regression', () => {
       );
       expect(result).not.toBeNull();
       expect(result!.type).toBe('replace');
-      expect(result!.serviceDisplayName).toBe('深層清潔 Facial');
+      if (result!.type === 'replace') {
+        expect(result!.serviceDisplayName).toBe('深層清潔 Facial');
+      }
     });
 
     it('unique service → replace (user says "HIFU" while drafting Facial)', () => {
@@ -358,7 +360,9 @@ describe('WhatsApp booking flow regression', () => {
       );
       expect(result).not.toBeNull();
       expect(result!.type).toBe('replace');
-      expect(result!.serviceDisplayName).toBe('HIFU 高強度聚焦超聲波');
+      if (result!.type === 'replace') {
+        expect(result!.serviceDisplayName).toBe('HIFU 高強度聚焦超聲波');
+      }
     });
 
     it('same service → null (user asks "HIFU幾多錢" while drafting HIFU)', () => {
@@ -421,7 +425,9 @@ describe('WhatsApp booking flow regression', () => {
       const result = detectServiceSwitch('我想做Spin Class', ptDraft, {}, fitCatalog, fitTax);
       expect(result).not.toBeNull();
       expect(result!.type).toBe('replace');
-      expect(result!.serviceDisplayName).toBe('Spin Class');
+      if (result!.type === 'replace') {
+        expect(result!.serviceDisplayName).toBe('Spin Class');
+      }
     });
 
     it('LLM pre-merged HIIT Class + user only category "class" → clear', () => {

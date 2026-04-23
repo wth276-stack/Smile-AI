@@ -6,6 +6,7 @@ import type {
   AiIntent,
   LLMOutput,
   BookingDraft,
+  KnowledgeChunk,
   PromptContext,
   TenantProfile,
   SideEffect,
@@ -28,7 +29,7 @@ import {
   extractSlots,
   getMissingBookingSlots,
 } from '../booking-state';
-import { buildServiceCatalog, buildServiceTaxonomy, detectServiceSwitch, matchService } from '../service-matcher';
+import { buildServiceCatalog, extractServiceText, matchService } from '../service-matcher';
 import { buildSlotPolicyFromTenantSettings, validateBookingSlot } from '../booking-slot-availability';
 
 const FALLBACK_REPLY = '抱歉，系統暫時遇到問題，請稍後再試 🙏';
@@ -98,6 +99,30 @@ function shouldSkipCase3WhenAffirmingWithoutPending(
   if (!bookingDraftHasAllRequiredSlots(finalMergedDraft)) return false;
   if (!isConfirmationMessage(input.currentMessage)) return false;
   return ['REPLY_ONLY', 'REPLY', 'CONFIRM_BOOKING'].includes(finalAction);
+}
+
+function detectServiceOverride(
+  message: string,
+  draft: BookingDraft,
+  newSlots: Partial<BookingDraft>,
+  knowledge: KnowledgeChunk[],
+): { action: 'clear' | 'replace'; serviceName?: string; serviceDisplayName?: string } | null {
+  if (!draft.serviceName) return null;
+  if (newSlots.serviceName && newSlots.serviceName !== draft.serviceName) return null;
+
+  const extracted = extractServiceText(message);
+  if (!extracted || extracted.length < 2) return null;
+
+  const catalog = buildServiceCatalog(knowledge);
+  const result = matchService(extracted, catalog);
+
+  if (result.type === 'none') return null;
+  if (result.type === 'ambiguous') return { action: 'clear' };
+
+  const matchedService = result.matches[0].service;
+  if (matchedService.code === draft.serviceName || matchedService.displayName === draft.serviceDisplayName) return null;
+
+  return { action: 'replace', serviceName: matchedService.code, serviceDisplayName: matchedService.displayName };
 }
 
 const MAX_HISTORY = 10;
@@ -792,27 +817,30 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
         finalNewSlots.serviceDisplayName ?? finalNewSlots.serviceName;
     }
 
-    // ── Service switch detection: clear or replace serviceName when user switches ──
-    const switchCatalog = buildServiceCatalog(input.knowledge);
-    const switchTaxonomy = buildServiceTaxonomy(switchCatalog);
-    const serviceSwitch = detectServiceSwitch(
-      input.currentMessage, finalMergedDraft, finalNewSlots, switchCatalog, switchTaxonomy,
+    let finalAction = validated.action as string;
+
+    // ── Service override: clear or replace serviceName when user mentions a different service ──
+    // Pass the pre-merge draft so detectServiceOverride compares against the old service state,
+    // not the already-overwritten finalMergedDraft.
+    const serviceOverride = detectServiceOverride(
+      input.currentMessage, validated.mergedDraft, finalNewSlots, input.knowledge,
     );
-    if (serviceSwitch) {
-      if (serviceSwitch.type === 'clear') {
+    if (serviceOverride) {
+      if (serviceOverride.action === 'clear') {
         finalMergedDraft.serviceName = null;
         finalMergedDraft.serviceDisplayName = null;
-        console.log('[v2/engine] Service switch: cleared serviceName (category-level reference)');
       } else {
-        finalMergedDraft.serviceName = serviceSwitch.serviceName!;
-        finalMergedDraft.serviceDisplayName = serviceSwitch.serviceDisplayName!;
-        console.log(`[v2/engine] Service switch: replaced with ${serviceSwitch.serviceDisplayName}`);
+        finalMergedDraft.serviceName = serviceOverride.serviceName ?? null;
+        finalMergedDraft.serviceDisplayName = serviceOverride.serviceDisplayName ?? null;
       }
+      if (finalAction === 'CONFIRM_BOOKING' || finalAction === 'SUBMIT_BOOKING') {
+        finalAction = 'COLLECT_BOOKING';
+      }
+      debugLog('[v2/engine] Service override:', serviceOverride.action, serviceOverride.serviceDisplayName ?? '(cleared)');
     }
+    const serviceOverrideOccurred = !!serviceOverride;
 
     const missingSlots = getMissingBookingSlots(finalMergedDraft);
-
-    let finalAction = validated.action as string;
 
     if (validated.action === 'CONFIRM_BOOKING' && missingSlots.length > 0) {
       console.log('[v2/engine] CONFIRM_BOOKING but missing:', missingSlots);
@@ -909,7 +937,7 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
         finalMergedDraft,
         finalAction,
       );
-      const skipCase3Template = duplicateAffirmGuard || affirmWithoutPendingCase3;
+      const skipCase3Template = duplicateAffirmGuard || affirmWithoutPendingCase3 || serviceOverrideOccurred;
       if (affirmWithoutPendingCase3 && !duplicateAffirmGuard) {
         console.warn(
           '[v2/engine] Skip Case 3 template: affirmation without confirmationPending (non-SUBMIT path; e.g. REPLY/CONFIRM after duplicate turn)',

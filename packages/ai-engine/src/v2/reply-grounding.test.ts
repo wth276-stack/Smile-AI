@@ -1,10 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { applyReplyGrounding } from './reply-grounding';
+import { applyReplyGrounding, CUSTOMER_SAFE_FALLBACK } from './reply-grounding';
 import { isServiceRecognizedInKnowledge } from './validator';
 import type { KnowledgeChunk } from '../types';
-
-const SAFE_FALLBACK =
-  '多謝你嘅查詢！我哋暫時未有呢方面嘅服務資料，歡迎聯絡我哋了解更多 😊';
 
 describe('applyReplyGrounding', () => {
   it('replaces with natural fallback when term not in allowlist and strip would be too short', () => {
@@ -16,7 +13,7 @@ describe('applyReplyGrounding', () => {
     });
     expect(rewritten).toBe(true);
     expect(issues.some((i) => i.includes('grounding'))).toBe(true);
-    expect(reply).toBe(SAFE_FALLBACK);
+    expect(reply).toBe(CUSTOMER_SAFE_FALLBACK);
     expect(reply).not.toMatch(/授權|知識庫|名單為準|唔好/);
   });
 
@@ -72,6 +69,27 @@ describe('applyReplyGrounding', () => {
     });
     expect(rewritten).toBe(true);
     expect(reply).not.toMatch(/按摩/);
+  });
+
+  it('replaces generic CTA tail with unsupported-service fallback after 按摩 removed', () => {
+    const { reply, rewritten } = applyReplyGrounding(
+      '我哋有香薰全身按摩。如果你有興趣預約其他服務，或者有其他問題，隨時告訴我！',
+      [],
+      { authorisedServiceCatalog: ['HIFU', '深層清潔'] },
+    );
+    expect(rewritten).toBe(true);
+    expect(reply).toBe(CUSTOMER_SAFE_FALLBACK);
+    expect(reply).not.toMatch(/隨時告訴我|其他問題|預約其他服務/);
+  });
+
+  it('replaces detail-only CTA when only generic tail remains', () => {
+    const { reply, rewritten } = applyReplyGrounding(
+      '我哋有專業按摩。如果需要更多詳情，隨時聯絡我！',
+      [],
+      { authorisedServiceCatalog: ['面部護理'] },
+    );
+    expect(rewritten).toBe(true);
+    expect(reply).toBe(CUSTOMER_SAFE_FALLBACK);
   });
 });
 

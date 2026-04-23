@@ -323,6 +323,101 @@ function scoreServices(input: string, catalog: ServiceEntry[]): ServiceMatchResu
 
 // ── Extract service-related text from a message ──
 
+// ── Service switch (draft vs new user mention) — used by engine.booking-rescue tests + callers ──
+
+export interface ServiceSwitchTaxonomy {
+  facialCodeSet: Set<string>;
+  classCodeSet: Set<string>;
+  hasMultiFacial: boolean;
+  hasMultiClass: boolean;
+}
+
+export function buildServiceTaxonomy(catalog: ServiceEntry[]): ServiceSwitchTaxonomy {
+  const facials = catalog.filter((s) => /facial/i.test(s.displayName));
+  const klasses = catalog.filter((s) => /\bclass\b/i.test(s.displayName));
+  return {
+    facialCodeSet: new Set(facials.map((s) => s.code)),
+    classCodeSet: new Set(klasses.map((s) => s.code)),
+    hasMultiFacial: facials.length >= 2,
+    hasMultiClass: klasses.length >= 2,
+  };
+}
+
+function isDraftSameAsService(draft: BookingDraft, s: ServiceEntry): boolean {
+  const d = (draft.serviceDisplayName ?? draft.serviceName ?? '').trim();
+  if (!d) return false;
+  if (d === s.displayName || d === s.code) return true;
+  return normalize(d) === normalize(s.displayName) || normalize(d) === normalize(s.code);
+}
+
+export type ServiceSwitchResult =
+  | { type: 'clear' }
+  | { type: 'replace'; serviceName: string; serviceDisplayName: string }
+  | null;
+
+/**
+ * When the user’s message points at a different or vague service vs the current draft
+ * (e.g. generic “FACIAL” vs HIFU, or “class” vs PT). Returns null if no switch signal.
+ */
+export function detectServiceSwitch(
+  message: string,
+  draft: BookingDraft,
+  _newSlots: Partial<BookingDraft>,
+  catalog: ServiceEntry[],
+  tax: ServiceSwitchTaxonomy,
+): ServiceSwitchResult {
+  if (!draft.serviceName && !draft.serviceDisplayName) return null;
+
+  const qRaw = extractServiceText(message).trim();
+  const q = qRaw.length >= 2 ? qRaw : message.replace(/\s+/g, ' ').trim();
+  if (q.length < 2) return null;
+
+  const m = matchService(q, catalog);
+
+  if (m.type === 'exact' || m.type === 'close') {
+    const top = m.matches[0]!.service;
+    if (isDraftSameAsService(draft, top)) return null;
+    return { type: 'replace', serviceName: top.code, serviceDisplayName: top.displayName };
+  }
+
+  if (m.type === 'ambiguous' && m.matches.length > 0) {
+    const matchCodes = new Set(m.matches.map((x) => x.service.code));
+    const draftInAmbiguous = m.matches.some((x) => isDraftSameAsService(draft, x.service));
+    if (!draftInAmbiguous) {
+      const allFacial = m.matches.every((x) => tax.facialCodeSet.has(x.service.code));
+      const allClass = m.matches.every((x) => tax.classCodeSet.has(x.service.code));
+      if ((allFacial && tax.hasMultiFacial) || (allClass && tax.hasMultiClass)) {
+        return { type: 'clear' };
+      }
+    }
+  }
+
+  // Generic category token when matcher scores none (e.g. "class" is generic in English list).
+  if (m.type === 'none' && tax.hasMultiClass && /^class$/i.test(q.replace(/[^\w]/g, ''))) {
+    const draftEntry = catalog.find(
+      (c) =>
+        c.displayName === draft.serviceDisplayName || c.code === draft.serviceName,
+    );
+    if (draftEntry && !tax.classCodeSet.has(draftEntry.code)) return { type: 'clear' };
+  }
+  if (m.type === 'none' && tax.hasMultiFacial && /^facial$/i.test(q.replace(/[^\w]/g, ''))) {
+    const draftEntry = catalog.find(
+      (c) =>
+        c.displayName === draft.serviceDisplayName || c.code === draft.serviceName,
+    );
+    if (draftEntry && !tax.facialCodeSet.has(draftEntry.code)) return { type: 'clear' };
+  }
+
+  const m2 = matchService(message.replace(/\s+/g, ' ').trim(), catalog);
+  if (m2.type === 'exact' || m2.type === 'close') {
+    const top = m2.matches[0]!.service;
+    if (isDraftSameAsService(draft, top)) return null;
+    return { type: 'replace', serviceName: top.code, serviceDisplayName: top.displayName };
+  }
+
+  return null;
+}
+
 export function extractServiceText(msg: string): string {
   return msg
     // Standalone greetings only: \b prevents stripping "Hi" from "HIFU", "High", etc.
@@ -338,205 +433,6 @@ export function extractServiceText(msg: string): string {
     .replace(/(好呀|好的|ok|sure)\s*/gi, '')
     .replace(/(了解|知道|了解下|知道下)\s*/g, '')
     .trim();
-}
-
-// ── Service taxonomy: domain-agnostic category detection ──
-//
-// Category terms are stable shared tokens — not arbitrary CJK n-grams.
-// Sources: full display names, full CJK portions, English stems ≥3 chars,
-// and explicit KB aliases. Arbitrary CJK bigrams/trigrams are excluded
-// because they create noisy false categories (e.g. "清潔" matching across
-// unrelated services).
-
-export interface ServiceTaxonomy {
-  /** Category term → services sharing that term (2+ services) */
-  categories: Map<string, ServiceEntry[]>;
-  /** Service code → category terms the service belongs to */
-  serviceCategories: Map<string, Set<string>>;
-}
-
-export interface ServiceSwitchResult {
-  type: 'clear' | 'replace';
-  serviceName?: string;
-  serviceDisplayName?: string;
-}
-
-/**
- * Extract stable category candidates from a service entry.
- * Only uses whole-name tokens and explicit labels — never arbitrary CJK fragments.
- */
-function extractStableCategoryCandidates(service: ServiceEntry): string[] {
-  const candidates = new Set<string>();
-  const name = service.displayName;
-
-  // Full normalized + stemmed display name (whole string, not fragments)
-  candidates.add(normalize(name));
-  candidates.add(stemPhrase(name));
-
-  // Full CJK portion of the display name (e.g. CJK run from "BrandName 產品全名")
-  const cjk = name.replace(/[^\u4e00-\u9fff]/g, '');
-  if (cjk.length >= 2) candidates.add(cjk);
-
-  // English stems ≥3 chars (e.g. product or modality tokens from the title)
-  for (const w of (name.match(/[a-zA-Z]{3,}/g) || [])) {
-    candidates.add(stem(w.toLowerCase()));
-  }
-
-  // Explicit KB aliases (user-defined labels, not auto-generated fragments)
-  for (const alias of service.aliases) {
-    const na = normalize(alias);
-    // Only keep aliases that are whole terms (≥2 chars, not 2-char CJK fragments)
-    if (na.length >= 3 || (na.length === 2 && /[a-zA-Z]/.test(na))) {
-      // Skip 2-char CJK-only strings (these are auto-generated bigrams)
-      if (/^[\u4e00-\u9fff]{2}$/.test(na)) continue;
-      // Skip 3-char CJK-only strings (auto-generated trigrams)
-      if (/^[\u4e00-\u9fff]{3}$/.test(na)) continue;
-      candidates.add(na);
-    }
-    // English stems from aliases
-    for (const w of (alias.match(/[a-zA-Z]{3,}/g) || [])) {
-      candidates.add(stem(w.toLowerCase()));
-    }
-  }
-
-  return [...candidates].filter(c => c.length >= 2);
-}
-
-/**
- * Build a taxonomy from the service catalog by finding stable shared tokens
- * across 2+ services. Category terms come from:
- * - Full display names (normalized + stemmed)
- * - Full CJK portions of display names
- * - English word stems ≥3 chars
- * - Explicit KB aliases (filtered to remove auto-generated CJK fragments)
- *
- * Domain-agnostic: beauty → "facial", dental → "implant", gym → "yoga".
- * CJK category terms require explicit KB aliases (e.g. aliases: ["美白療程"]).
- */
-export function buildServiceTaxonomy(catalog: ServiceEntry[]): ServiceTaxonomy {
-  const termToServices = new Map<string, Set<string>>();
-
-  for (const service of catalog) {
-    const candidates = extractStableCategoryCandidates(service);
-    for (const term of candidates) {
-      const set = termToServices.get(term) ?? new Set();
-      set.add(service.code);
-      termToServices.set(term, set);
-    }
-  }
-
-  // Categories: stable terms appearing in 2+ services
-  const categories = new Map<string, ServiceEntry[]>();
-  const serviceCategories = new Map<string, Set<string>>();
-
-  for (const [term, serviceCodes] of termToServices) {
-    if (serviceCodes.size >= 2) {
-      const catServices = catalog.filter(s => serviceCodes.has(s.code));
-      categories.set(term, catServices);
-      for (const code of serviceCodes) {
-        const set = serviceCategories.get(code) ?? new Set();
-        set.add(term);
-        serviceCategories.set(code, set);
-      }
-    }
-  }
-
-  return { categories, serviceCategories };
-}
-
-/**
- * Detect when a user switches services during an active booking.
- * Conservative: returns null if unsure. Only clears/replaces when confident.
- *
- * Uses the post-merge service (newSlots.serviceName || draft.serviceName) as
- * the baseline, so it works correctly whether or not the LLM extracted a service.
- *
- * - exact concrete item mention → replace
- * - exact generic category mention → clear (even if LLM already picked one)
- * - no reliable switch → null
- */
-export function detectServiceSwitch(
-  message: string,
-  draft: BookingDraft,
-  newSlots: Partial<BookingDraft>,
-  catalog: ServiceEntry[],
-  taxonomy: ServiceTaxonomy,
-): ServiceSwitchResult | null {
-  // No draft service → no switch possible
-  if (!draft.serviceName) return null;
-
-  // Post-merge baseline: newSlots takes precedence over draft.
-  // This handles the case where LLM already extracted a new service.
-  const currentService = newSlots.serviceName || draft.serviceName;
-  const currentDisplayService = newSlots.serviceDisplayName || draft.serviceDisplayName;
-
-  const extracted = extractServiceText(message);
-  if (!extracted || extracted.length < 2) return null;
-
-  const matchResult = matchService(extracted, catalog);
-
-  // No match → null (no service mentioned)
-  if (matchResult.type === 'none') return null;
-
-  // Ambiguous match → category-level reference if all matches
-  // differ from the current (post-merge) service.
-  if (matchResult.type === 'ambiguous') {
-    const allDifferentFromCurrent = matchResult.matches.every(
-      m => m.service.code !== currentService
-        && m.service.displayName !== currentDisplayService,
-    );
-    if (allDifferentFromCurrent) return { type: 'clear' };
-
-    // User text is only a shared category token (e.g. "FACIAL") but post-merge
-    // draft/LLM already points at one family member — still disambiguate, not
-    // treat as a committed choice.
-    const stemIn = stemPhrase(extracted);
-    const normIn = normalize(extracted);
-    for (const hit of matchResult.matches) {
-      const cats = taxonomy.serviceCategories.get(hit.service.code);
-      if (!cats) continue;
-      for (const cat of cats) {
-        if (stemIn === stemPhrase(cat) || normIn === normalize(cat)) {
-          return { type: 'clear' };
-        }
-      }
-    }
-    return null;
-  }
-
-  // Exact/close match — safe to access matchedService
-  const matchedService = matchResult.matches[0].service;
-
-  // Check if user's input is a category-level reference even when matched
-  // service is the same as current. E.g. user types "FACIAL" → matchService
-  // returns exact for "深層清潔 Facial", but "facial" is a category term —
-  // user should be asked which subtype, not locked into the LLM's pick.
-  const cats = taxonomy.serviceCategories.get(matchedService.code);
-  const stemmedInput = stemPhrase(extracted);
-  const normalizedInput = normalize(extracted);
-
-  if (cats && cats.size > 0) {
-    for (const cat of cats) {
-      if (stemmedInput === stemPhrase(cat) || normalizedInput === normalize(cat)) {
-        return { type: 'clear' };
-      }
-    }
-  }
-
-  // Same as the post-merge service and input is not a category reference → no switch
-  if (matchedService.code === currentService
-    || matchedService.displayName === currentDisplayService) {
-    return null;
-  }
-
-  // Different service, not a category reference
-  // No category terms → unique service, safe to replace
-  if (!cats || cats.size === 0) {
-    return { type: 'replace', serviceName: matchedService.code, serviceDisplayName: matchedService.displayName };
-  }
-
-  // Service is in a generic family but input is more specific than a category → replace
-  return { type: 'replace', serviceName: matchedService.code, serviceDisplayName: matchedService.displayName };
 }
 
 // ── Regression (after build: from repo root)

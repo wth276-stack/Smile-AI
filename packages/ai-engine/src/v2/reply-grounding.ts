@@ -15,10 +15,51 @@ const GROUNDED_TERMS: Array<{ term: string; re: RegExp }> = [
   { term: '脫毛', re: /脫毛/g },
 ];
 
-const CUSTOMER_SAFE_FALLBACK =
-  '多謝你嘅查詢！我哋暫時未有呢方面嘅服務資料，歡迎聯絡我哋了解更多 😊';
+/** Full reply when removal leaves only empty / generic-CTA tail (no substantive answer). */
+export const CUSTOMER_SAFE_FALLBACK =
+  '多謝你嘅查詢！我哋暫時未有呢方面嘅服務資料，想了解其他店內療程，我可以幫你介紹。';
 
 const MIN_REMAINING_CHARS = 12;
+
+/** Non-exhaustive: pricing, hours, address, or concrete service cues — remainder with any of these is kept. */
+function hasSubstantiveInfo(s: string): boolean {
+  if (/價(錢|格)?|收費|元|蚊|\$|HKD|HK\$/i.test(s)) return true;
+  if (/\d/.test(s) && /(\d+[:：]\d{0,2}|\$|元|分鐘|小時|號|點|月|個鐘|：\d)/.test(s)) return true;
+  if (/營業|地址|電話|WhatsApp|聯絡方式/i.test(s)) return true;
+  if (/體驗(價|堂)?|正價|半價|折扣|套[餐餐]/.test(s)) return true;
+  if (/HIFU|laser|Botox|針[灸對]?|脫[毛]?|美[白]|清潔|護理|療程|V面|深層|祛斑/i.test(s)) return true;
+  if (/星期|週[一二三四五六日天]|[今明聽後]天|[上下]午/.test(s)) return true;
+  return false;
+}
+
+const GENERIC_CTA_PATTERNS: RegExp[] = [
+  /隨時告訴我/,
+  /更多詳情/,
+  /有其他問題/,
+  /隨時聯[絡系]/,
+  /預約其他服務/,
+  /有[興趣意].*預約/,
+  /隨時問我/,
+  /如[果果]?你需要更多/,
+  /如果需要更多/,
+  /樂意(為你|幫你)/,
+  /歡迎隨時/,
+  /隨時.*[告找查]我/,
+];
+
+/**
+ * After stripping a hallucinated high-risk term, the remainder is "weak" if it has no
+ * substantive answer and reads like generic CTA / filler only.
+ */
+function isWeakGenericRemainder(s: string): boolean {
+  const t = s.replace(/\s+/g, ' ').trim();
+  if (t.length === 0) return true;
+  if (hasSubstantiveInfo(t)) return false;
+  if (t.length < 14) return true;
+  if (GENERIC_CTA_PATTERNS.some((p) => p.test(t))) return true;
+  if (t.length < 50 && /[？!！]$/.test(t) && /(隨|問|幫|聯|搵)/.test(t)) return true;
+  return false;
+}
 
 function catalogAllowsTerm(authorisedServiceCatalog: string[] | undefined, term: string): boolean {
   if (!authorisedServiceCatalog?.length) return false;
@@ -101,11 +142,15 @@ export function applyReplyGrounding(
 
     const cleaned = tryCleanRemove(out, re, term);
     if (cleaned !== null) {
-      out = cleaned;
+      out = isWeakGenericRemainder(cleaned) ? CUSTOMER_SAFE_FALLBACK : cleaned;
     } else {
       out = CUSTOMER_SAFE_FALLBACK;
     }
     rewritten = true;
+  }
+
+  if (rewritten && isWeakGenericRemainder(out)) {
+    out = CUSTOMER_SAFE_FALLBACK;
   }
 
   return { reply: out.trim(), rewritten, issues };
