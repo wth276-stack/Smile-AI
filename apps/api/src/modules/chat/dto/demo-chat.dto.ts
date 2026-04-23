@@ -1,14 +1,21 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, MinLength } from 'class-validator';
 
 /**
- * DTO for public demo chat endpoint (no authentication required)
- * Used by the Smile AI Landing Page demo
+ * Same behavior as POST /api/chat/public with `industryId` + `conversationId`.
+ * Contact name is "Website Visitor" in the engine (via handlePublicMessage); isDemoChat
+ * still true for all industry demo tenants so enginePath / fallbackReason are included.
+ * For multi-turn, pass `conversationId` from the previous response.
  */
 export class DemoChatDto {
   @IsString()
-  message: string;
+  @MinLength(1)
+  message!: string;
 
   @IsOptional()
   @IsString()
   industry?: string; // beauty, cleaning, renovation, consulting, yoga
+
+  @IsOptional()
+  @IsString()
+  conversationId?: string;
 }

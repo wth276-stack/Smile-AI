@@ -3,45 +3,32 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DocType } from '@prisma/client';
-import { DEMO_TENANT_ID, mergeDemoTenantSettingsPreservingKeys, updateBookingDraft } from '@ats/database';
+import {
+  applyIndustrySeedToTenant,
+  getDemoTenantIdForIndustryId,
+  getIndustrySeed,
+  isDemoIndustryTenantId,
+  updateBookingDraft,
+} from '@ats/database';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { getIndustrySeed, type IndustryService } from './industry-seeds';
-
-/** Maps industry seed id → tenant.settings.businessType (V2 prompt). */
-const INDUSTRY_BUSINESS_TYPE: Record<string, string> = {
-  beauty: 'beauty salon',
-  cleaning: 'professional cleaning service',
-  renovation: 'renovation and interior design',
-  consulting: 'private consulting',
-  fitness: 'fitness studio',
-};
-
-function mapIndustryToBusinessType(industryId: string): string {
-  return INDUSTRY_BUSINESS_TYPE[industryId] ?? 'general business';
-}
-
-function buildServiceKbContent(svc: IndustryService): string {
-  const faqLine = svc.faq.map((f) => `${f.q}: ${f.a}`).join(' / ');
-  return `## ${svc.displayName}\n價錢: ${svc.price} | 時間: ${svc.duration}\n功效: ${svc.description}\n適合: ${svc.suitable}\n注意: ${svc.caution}\n常見問題: ${faqLine}`;
-}
 
 @Injectable()
 export class DemoService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Reset a landing-page conversation: clear messages, AI run history, and booking metadata.
-   * Must delete AiRun rows or loadConversationState would still restore old bookingDraft from signals.
+   * Clear messages + booking state for a demo conversation (any industry tenant).
+   * No-op if conversation missing (client may send stale id on industry switch).
    */
   private async resetConversationIfNeeded(conversationId: string | undefined): Promise<void> {
     if (!conversationId?.trim()) return;
 
     const conv = await this.prisma.conversation.findFirst({
-      where: { id: conversationId.trim(), tenantId: DEMO_TENANT_ID },
+      where: { id: conversationId.trim() },
     });
-    if (!conv) {
-      throw new NotFoundException('Conversation not found');
+    if (!conv) return;
+    if (!isDemoIndustryTenantId(conv.tenantId)) {
+      throw new BadRequestException('Conversation is not part of a demo tenant');
     }
 
     await this.prisma.$transaction([
@@ -60,92 +47,93 @@ export class DemoService {
     industry: string;
     servicesCount: number;
     kbCount: number;
+    tenantId: string;
+    destructive: {
+      scope: string;
+      whatChanged: string[];
+      dataLoss: string;
+    };
   }> {
+    const tenantId = getDemoTenantIdForIndustryId(industryId.trim());
+    if (!tenantId) {
+      throw new BadRequestException(`Unknown industryId: ${industryId}`);
+    }
     const seed = getIndustrySeed(industryId.trim());
     if (!seed) {
       throw new BadRequestException(`Unknown industryId: ${industryId}`);
     }
 
-    const tenant = await this.prisma.tenant.findUniqueOrThrow({
-      where: { id: DEMO_TENANT_ID },
-    });
-
     await this.resetConversationIfNeeded(conversationId);
 
-    const existingSettings = (tenant.settings as Record<string, unknown>) ?? {};
-
-    let mergedSettings = mergeDemoTenantSettingsPreservingKeys(existingSettings, {
-      businessName: seed.displayName,
-      assistantRole: seed.persona,
-      businessHoursText: seed.businessHoursText,
-      contactPhone: seed.contactPhone,
-      contactWhatsApp: seed.contactWhatsApp,
-      businessType: mapIndustryToBusinessType(seed.id),
-    });
-    if (seed.businessHours) {
-      mergedSettings = mergeDemoTenantSettingsPreservingKeys(mergedSettings, {
-        businessHours: seed.businessHours,
-        timezone: seed.timezone ?? 'Asia/Hong_Kong',
-      });
-    }
-
-    await this.prisma.tenant.update({
-      where: { id: DEMO_TENANT_ID },
-      data: {
-        name: seed.displayName,
-        settings: mergedSettings as object,
-      },
-    });
-
-    await this.prisma.knowledgeDocument.deleteMany({
-      where: { tenantId: DEMO_TENANT_ID },
-    });
-
-    let kbCount = 0;
-
-    for (const kb of seed.knowledgeBase) {
-      await this.prisma.knowledgeDocument.create({
-        data: {
-          tenantId: DEMO_TENANT_ID,
-          title: kb.title,
-          content: kb.content,
-          docType: DocType.FAQ,
-          isActive: true,
-        },
-      });
-      kbCount += 1;
-    }
-
-    for (const svc of seed.services) {
-      const content = buildServiceKbContent(svc);
-      // TODO: When KnowledgeDocument supports embeddings / vectors, call the same pipeline as admin KB create.
-      await this.prisma.knowledgeDocument.create({
-        data: {
-          tenantId: DEMO_TENANT_ID,
-          title: svc.displayName,
-          content,
-          docType: DocType.SERVICE,
-          isActive: true,
-          duration: svc.duration,
-          effect: svc.description,
-          suitable: svc.suitable,
-          unsuitable: undefined,
-          precaution: svc.caution,
-          price: svc.price,
-          aliases: [svc.name, svc.displayName],
-          faqItems: svc.faq.map((f) => ({ question: f.q, answer: f.a })),
-        },
-      });
-      kbCount += 1;
-    }
-
-    const servicesCount = seed.services.length;
+    const { servicesCount, kbCount, displayName } = await applyIndustrySeedToTenant(
+      this.prisma,
+      tenantId,
+      industryId.trim(),
+    );
 
     return {
       success: true,
-      industry: seed.displayName,
+      industry: displayName,
       servicesCount,
       kbCount,
+      tenantId,
+      destructive: {
+        scope: 'This demo tenant was reset from canonical industry seed data.',
+        whatChanged: [
+          'All KnowledgeDocument rows for this tenant were replaced (FAQ + service articles).',
+          'Tenant name and settings (persona, business hours, contact fields, businessType, structured hours) were overwritten from seed.',
+        ],
+        dataLoss: 'Any manual demo edits in the dashboard (KB, tenant settings) for this tenant are lost.',
+      },
     };
+  }
+
+  /**
+   * Point the WhatsApp test integration (one ChannelConfig row) at a demo industry tenant.
+   * Deactivates any other WHATSAPP config on the target tenant to satisfy @@unique([tenantId, channel]).
+   */
+  async rebindWhatsAppToIndustry(
+    industryId: string,
+    channelConfigId?: string,
+  ): Promise<{ tenantId: string; channelConfigId: string; industryId: string }> {
+    const tenantId = getDemoTenantIdForIndustryId(industryId.trim());
+    if (!tenantId) {
+      throw new BadRequestException(`Unknown industryId: ${industryId}`);
+    }
+
+    const cfg = channelConfigId?.trim()
+      ? await this.prisma.channelConfig.findFirst({ where: { id: channelConfigId.trim() } })
+      : await this.prisma.channelConfig.findFirst({
+          where: { channel: 'WHATSAPP', isActive: true },
+          orderBy: { updatedAt: 'desc' },
+        });
+
+    if (!cfg) {
+      throw new NotFoundException(
+        'No WhatsApp ChannelConfig found. Pass channelConfigId or create an active WHATSAPP integration.',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const others = await tx.channelConfig.findMany({
+        where: {
+          tenantId,
+          channel: 'WHATSAPP',
+          NOT: { id: cfg.id },
+        },
+      });
+      for (const o of others) {
+        await tx.channelConfig.update({
+          where: { id: o.id },
+          data: { isActive: false },
+        });
+      }
+      await tx.channelConfig.update({
+        where: { id: cfg.id },
+        data: { tenantId, isActive: true },
+      });
+    });
+
+    return { tenantId, channelConfigId: cfg.id, industryId: industryId.trim() };
   }
 }

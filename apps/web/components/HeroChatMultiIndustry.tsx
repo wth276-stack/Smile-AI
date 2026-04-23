@@ -4,8 +4,6 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 're
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-const TENANT_SLUG = 'demo-tenant';
-
 interface IndustryConfig {
   icon: string;
   label: string;
@@ -58,9 +56,9 @@ const INDUSTRY_CONFIG: Record<string, IndustryConfig> = {
       { label: '服務種類', message: '你哋有咩咨詢服務？' },
     ],
   },
-  fitness: {
+  yoga: {
     icon: '🧘',
-    label: '健身',
+    label: '瑜珈 / 健身',
     welcome: '你好！我係 ZenFit Studio 嘅 AI 助手，隨時為你服務 🧘',
     quickActions: [
       { label: '問價錢', message: '想問下課堂收費？' },
@@ -71,17 +69,17 @@ const INDUSTRY_CONFIG: Record<string, IndustryConfig> = {
   },
 };
 
-const TAB_ORDER = ['beauty', 'cleaning', 'renovation', 'consulting', 'fitness'] as const;
+const TAB_ORDER = ['beauty', 'cleaning', 'renovation', 'consulting', 'yoga'] as const;
 
 export default function HeroChatMultiIndustry() {
   const [currentIndustry, setCurrentIndustry] = useState<string>('beauty');
-  const [industries, setIndustries] = useState<{ id: string; displayName: string }[]>([]);
+  const [industries, setIndustries] = useState<
+    { id: string; displayName: string; tenantId: string | null }[]
+  >([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isSwitching, setIsSwitching] = useState(false);
-
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -95,21 +93,15 @@ export default function HeroChatMultiIndustry() {
       try {
         const res = await fetch(`${API_BASE}/api/demo/industries`);
         if (res.ok) {
-          const data = (await res.json()) as { id: string; displayName: string }[];
+          const data = (await res.json()) as {
+            id: string;
+            displayName: string;
+            tenantId: string | null;
+          }[];
           if (!cancelled) setIndustries(data);
         }
       } catch (err) {
         console.error('Load industries error:', err);
-      }
-
-      try {
-        await fetch(`${API_BASE}/api/demo/reset`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ industryId: 'beauty' }),
-        });
-      } catch (err) {
-        console.error('Initial reset error:', err);
       }
 
       if (!cancelled) {
@@ -132,8 +124,8 @@ export default function HeroChatMultiIndustry() {
       setInputValue('');
       setIsLoading(true);
 
-      const body: { tenantSlug: string; message: string; conversationId?: string } = {
-        tenantSlug: TENANT_SLUG,
+      const body: { industryId: string; message: string; conversationId?: string } = {
+        industryId: currentIndustry,
         message: trimmed,
       };
 
@@ -195,37 +187,18 @@ export default function HeroChatMultiIndustry() {
         setIsLoading(false);
       }
     },
-    [isLoading, conversationId],
+    [isLoading, conversationId, currentIndustry],
   );
 
-  const switchIndustry = async (industryId: string) => {
-    if (industryId === currentIndustry || isSwitching) return;
-
-    setIsSwitching(true);
-
-    try {
-      await fetch(`${API_BASE}/api/demo/reset`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          industryId,
-          conversationId: conversationId || undefined,
-        }),
-      });
-
-      setConversationId(null);
-      setMessages([]);
-      setCurrentIndustry(industryId);
-      setInputValue('');
-
-      const welcome =
-        INDUSTRY_CONFIG[industryId]?.welcome || '你好！有咩可以幫到你？';
-      setMessages([{ role: 'assistant', content: welcome }]);
-    } catch (err) {
-      console.error('Switch industry error:', err);
-    } finally {
-      setIsSwitching(false);
-    }
+  const switchIndustry = (industryId: string) => {
+    if (industryId === currentIndustry) return;
+    setConversationId(null);
+    setMessages([]);
+    setCurrentIndustry(industryId);
+    setInputValue('');
+    const welcome =
+      INDUSTRY_CONFIG[industryId]?.welcome || '你好！有咩可以幫到你？';
+    setMessages([{ role: 'assistant', content: welcome }]);
   };
 
   const currentConfig = INDUSTRY_CONFIG[currentIndustry];
@@ -250,13 +223,6 @@ export default function HeroChatMultiIndustry() {
       <div
         className="w-full max-w-[480px] flex flex-col bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden relative h-[85vh] md:h-[70vh] max-h-[900px]"
       >
-        {isSwitching && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/70 dark:bg-gray-900/70 backdrop-blur-sm">
-            <div className="h-10 w-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            <p className="mt-3 text-sm text-gray-700 dark:text-gray-200">切換行業中...</p>
-          </div>
-        )}
-
         <div className="shrink-0 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
           <div className="flex min-w-0 gap-1 px-2 py-2">
             {TAB_ORDER.map((id) => {
@@ -266,8 +232,7 @@ export default function HeroChatMultiIndustry() {
                 <button
                   key={id}
                   type="button"
-                  disabled={isSwitching}
-                  onClick={() => void switchIndustry(id)}
+                  onClick={() => switchIndustry(id)}
                   className={`shrink-0 px-3 py-2 rounded-t-lg text-sm font-medium transition-colors whitespace-nowrap ${
                     active
                       ? 'bg-blue-50 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 border-b-2 border-blue-600'
@@ -344,7 +309,7 @@ export default function HeroChatMultiIndustry() {
                 <button
                   key={qa.label}
                   type="button"
-                  disabled={isSwitching || isLoading}
+                  disabled={isLoading}
                   onClick={() => void sendMessage(qa.message)}
                   className="shrink-0 rounded-full border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
                 >
@@ -362,14 +327,14 @@ export default function HeroChatMultiIndustry() {
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="輸入訊息..."
-              disabled={isLoading || isSwitching}
+              disabled={isLoading}
               rows={1}
               className="flex-1 min-h-[44px] max-h-28 resize-none rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
               aria-label="訊息輸入"
             />
             <button
               type="button"
-              disabled={!inputValue.trim() || isLoading || isSwitching}
+              disabled={!inputValue.trim() || isLoading}
               onClick={() => void sendMessage(inputValue)}
               className="shrink-0 min-h-[44px] px-4 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >

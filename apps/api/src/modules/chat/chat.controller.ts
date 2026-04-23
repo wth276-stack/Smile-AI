@@ -11,20 +11,16 @@ export class ChatController {
   }
 
   /**
-   * Public demo endpoint for Landing Page
-   * No authentication required - uses demo-tenant
+   * Debug / legacy demo route — delegates to the same public webchat path as the landing
+   * widget so conversationId + industry work consistently (enginePath in responses when
+   * contact is a demo user contact name is handled by isDemoChat).
    */
   @Post('demo')
   handleDemoMessage(@Body() dto: DemoChatDto) {
-    // Generate a unique contact ID for each demo session
-    const sessionId = `demo-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-
-    return this.chat.handleInboundMessage({
-      tenantId: 'demo-tenant',
-      channel: 'WEBCHAT',
-      externalContactId: sessionId,
-      contactName: 'Demo User',
+    return this.chat.handlePublicMessage({
+      industryId: (dto.industry ?? 'beauty').trim(),
       message: dto.message,
+      conversationId: dto.conversationId,
     });
   }
 

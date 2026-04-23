@@ -1,5 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { ensureDemoTenantStructuredSlotSettings } from '@ats/database';
+import {
+  ensureDemoTenantStructuredSlotSettings,
+  ensureDemoIndustryTenantsStructuredSlotSettings,
+} from '@ats/database';
 import { PrismaService } from '../common/prisma/prisma.service';
 
 /**
@@ -18,6 +21,11 @@ export class DemoTenantBootstrapService implements OnModuleInit {
       await ensureDemoTenantStructuredSlotSettings(this.prisma);
     } catch (e) {
       this.log.warn(`ensureDemoTenantStructuredSlotSettings failed (non-fatal): ${String(e)}`);
+    }
+    try {
+      await ensureDemoIndustryTenantsStructuredSlotSettings(this.prisma);
+    } catch (e) {
+      this.log.warn(`ensureDemoIndustryTenantsStructuredSlotSettings failed (non-fatal): ${String(e)}`);
     }
   }
 }

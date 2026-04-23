@@ -47,3 +47,22 @@ export {
   ensureDemoTenantStructuredSlotSettings,
   type EnsureDemoTenantSlotSettingsResult,
 } from './demo-tenant-slot-settings';
+export {
+  INDUSTRY_ID_TO_DEMO_TENANT_ID,
+  ALL_DEMO_INDUSTRY_TENANT_IDS,
+  getDemoTenantIdForIndustryId,
+  getIndustryIdForDemoTenantId,
+  isDemoIndustryTenantId,
+  mapIndustryIdToBusinessType,
+} from './demo-industry-tenants';
+export { applyIndustrySeedToTenant } from './apply-industry-seed';
+export { ensureDemoIndustryTenantsStructuredSlotSettings } from './demo-industry-tenants-bootstrap';
+export {
+  getIndustrySeed,
+  getAllIndustryIds,
+  industrySeedData,
+  type IndustryService,
+  type IndustryKB,
+  type IndustrySeed,
+  type StructuredBusinessHours,
+} from './industry-seeds';

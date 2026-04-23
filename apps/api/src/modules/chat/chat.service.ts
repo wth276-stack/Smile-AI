@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -14,7 +14,13 @@ import {
   runAiEngine,
 } from '@ats/ai-engine';
 import type { AiEngineInput, AiEngineResult, BookingDraft } from '@ats/ai-engine';
-import { getConversationBookingState, updateBookingDraft, mergeConversationMetadata } from '@ats/database';
+import {
+  getConversationBookingState,
+  updateBookingDraft,
+  mergeConversationMetadata,
+  isDemoIndustryTenantId,
+  getDemoTenantIdForIndustryId,
+} from '@ats/database';
 import type { ChatMessageDto } from './dto/chat-message.dto';
 import type { PublicChatDto } from './dto/public-chat.dto';
 import { shouldEscapeStaleConfirmation } from './stale-confirmation-escape';
@@ -43,9 +49,29 @@ export class ChatService {
   /**
    * Public embed chat: tenant id = tenantSlug (no separate slug column).
    * Reuses handleInboundMessage — same contact+conversation resolution as authenticated chat.
+   * Returns the same payload as /api/chat/message (including enginePath / fallbackReason when isDemoChat).
    */
-  async handlePublicMessage(dto: PublicChatDto): Promise<{ reply: string; conversationId: string }> {
-    const tenant = await this.prisma.tenant.findUnique({ where: { id: dto.tenantSlug.trim() } });
+  async handlePublicMessage(dto: PublicChatDto): Promise<{
+    reply: string;
+    conversationId: string;
+    contactId: string;
+    sideEffects: unknown;
+    sideEffectFailures: unknown;
+    enginePath?: string;
+    fallbackReason?: string;
+  }> {
+    const fromIndustry = dto.industryId?.trim();
+    const resolvedId = fromIndustry
+      ? getDemoTenantIdForIndustryId(fromIndustry)
+      : (dto.tenantSlug ?? '').trim();
+    if (fromIndustry && !resolvedId) {
+      throw new BadRequestException(`Unknown industryId: ${fromIndustry}`);
+    }
+    if (!resolvedId) {
+      throw new BadRequestException('Provide tenantSlug or industryId');
+    }
+
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: resolvedId } });
     if (!tenant) {
       throw new NotFoundException('Tenant not found');
     }
@@ -70,25 +96,24 @@ export class ChatService {
       externalContactId = `webpub-${randomUUID()}`;
     }
 
-    const result = await this.handleInboundMessage({
+    return this.handleInboundMessage({
       tenantId: tenant.id,
       channel: 'WEBCHAT',
       externalContactId,
       contactName: 'Website Visitor',
       message: dto.message.trim(),
     });
-
-    return {
-      reply: result.reply,
-      conversationId: result.conversationId,
-    };
   }
 
   async handleInboundMessage(dto: ChatMessageDto) {
     const { tenantId, channel, contactName } = dto;
     let { externalContactId, message } = dto;
+    // Debug fields (enginePath, fallbackReason) for all five industry demo tenants — see
+    // isDemoIndustryTenantId() in @ats/database (not hardcoded to demo-tenant only).
     const isDemoChat =
-      tenantId === 'demo-tenant' && channel === 'WEBCHAT' && (contactName ?? '') === 'Demo User';
+      isDemoIndustryTenantId(tenantId) &&
+      channel === 'WEBCHAT' &&
+      ((contactName ?? '') === 'Demo User' || (contactName ?? '') === 'Website Visitor');
 
     /** When true, booking lookup must not match other sessions that share the same wa_id digits. */
     let whatsappTestSessionActive = false;

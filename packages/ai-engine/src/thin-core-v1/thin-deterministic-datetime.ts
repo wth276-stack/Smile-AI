@@ -64,7 +64,7 @@ function extractThinExtraTime(msg: string): string | null {
       return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
   }
 
-  // 聽日/明日/明天 + bare N點 → evening slot for salons
+  // 聽日/明日/明天 + bare N點 → default to PM-style 12h in many booking contexts (e.g. appointments)
   if (/(?:聽日|明日|明天)/.test(msg)) {
     const bare = msg.match(/(\d{1,2})\s*[點時](\d{1,2})?/);
     if (bare && !/(?:上午|早上|凌晨|中午|下午|下晝|晚上|夜晚|晚|今晚)/.test(msg)) {
