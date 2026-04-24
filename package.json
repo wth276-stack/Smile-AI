@@ -24,6 +24,7 @@
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:clean": "docker compose down -v",
+    "export:demo-kb": "tsx scripts/export-demo-tenant-kb.ts",
     "clean": "turbo clean && rimraf node_modules"
   },
   "devDependencies": {

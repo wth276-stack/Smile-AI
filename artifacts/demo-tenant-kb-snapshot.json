@@ -1,0 +1,1380 @@
+{
+  "_export": {
+    "readOnly": true,
+    "source": "KnowledgeDocument",
+    "tenantId": "demo-tenant",
+    "exportedAt": "2026-04-23T15:22:38.475Z",
+    "documentCount": 38,
+    "countByDocType": {
+      "SERVICE": 27,
+      "FAQ": 11,
+      "GENERAL": 0
+    },
+    "duplicateTitleGroups": [
+      {
+        "title": "Botox 瘦面療程",
+        "ids": [
+          "cmo06ap370009noic49b8e2cx",
+          "svc-botox"
+        ]
+      },
+      {
+        "title": "深層清潔 Facial",
+        "ids": [
+          "cmo3rpml50001no28o4lyrkax",
+          "svc-facial"
+        ]
+      }
+    ],
+    "idTitleSha256": "5c8202578bedb1893f5edc11737cca0e0db8ba898a089c012addce3a5da93c5c",
+    "note": "Preservation snapshot of DB state; may differ from industry-seeds.ts. demo/reset or seed can overwrite."
+  },
+  "documents": [
+    {
+      "id": "cmo06ap370009noic49b8e2cx",
+      "tenantId": "demo-tenant",
+      "title": "Botox 瘦面療程",
+      "content": "## Botox 瘦面療程\n價錢: $2,500 → $1,800 | 時間: 15-30 分鐘\n功效: 放鬆咀嚼肌、達到瘦面效果、改善國字臉\n適合: 咀嚼肌發達、國字臉型人士\n注意: 注射後 4 小時內避免平躺、一週內避免按摩注射部位\n常見問題: Botox 瘦面幾耐見效: 一般 1-2 週開始見效 / 會唔會有副作用: 正常情況下副作用輕微，可能有輕微瘀青",
+      "category": null,
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-15T14:56:02.948Z",
+      "updatedAt": "2026-04-15T14:56:02.948Z",
+      "duration": "15-30 分鐘",
+      "effect": "放鬆咀嚼肌、達到瘦面效果、改善國字臉",
+      "precaution": "注射後 4 小時內避免平躺、一週內避免按摩注射部位",
+      "suitable": "咀嚼肌發達、國字臉型人士",
+      "unsuitable": null,
+      "docType": "SERVICE",
+      "discountPrice": null,
+      "faqItems": [
+        {
+          "answer": "一般 1-2 週開始見效",
+          "question": "Botox 瘦面幾耐見效"
+        },
+        {
+          "answer": "正常情況下副作用輕微，可能有輕微瘀青",
+          "question": "會唔會有副作用"
+        }
+      ],
+      "price": "$2,500 → $1,800",
+      "steps": [],
+      "aliases": [
+        "botox",
+        "Botox 瘦面療程"
+      ]
+    },
+    {
+      "id": "svc-botox",
+      "tenantId": "demo-tenant",
+      "title": "Botox 瘦面療程",
+      "content": "Botox 瘦面療程利用肉毒桿菌素放鬆咀嚼肌，達到瘦面效果。\n\n療程特點：\n- 療程快速\n- 無恢復期\n- 效果自然\n\n效果維持：約 6-9 個月",
+      "category": null,
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-22T22:10:04.703Z",
+      "updatedAt": "2026-04-22T22:10:04.703Z",
+      "duration": "15-30 分鐘",
+      "effect": "放鬆咀嚼肌、達到瘦面效果、改善國字臉",
+      "precaution": "注射後 4 小時內避免平躺、一週內避免按摩注射部位",
+      "suitable": "咀嚼肌發達、國字臉型人士",
+      "unsuitable": "孕婦、哺乳中、重症肌無力症患者",
+      "docType": "SERVICE",
+      "discountPrice": "HK$1800",
+      "faqItems": [
+        {
+          "answer": "一般 1-2 週開始見效，4-6 週效果最明顯。",
+          "question": "Botox 瘦面幾耐見效？"
+        },
+        {
+          "answer": "正常情況下副作用輕微，可能出現輕微瘀青或腫脹，數天內消退。",
+          "question": "會唔會有副作用？"
+        },
+        {
+          "answer": "建議每 6-9 個月做一次維持效果。",
+          "question": "要做幾多次？"
+        }
+      ],
+      "price": "HK$2500",
+      "steps": [],
+      "aliases": [
+        "Botox",
+        "肉毒桿菌",
+        "瘦面",
+        "瘦面針",
+        "botox瘦面"
+      ]
+    },
+    {
+      "id": "svc-hifu",
+      "tenantId": "demo-tenant",
+      "title": "HIFU 緊緻療程",
+      "content": "HIFU（High-Intensity Focused Ultrasound）利用高強度聚焦超聲波能量，深入真皮層及筋膜層，刺激膠原蛋白增生，達到緊緻提升效果。\n\n療程特點：\n- 非侵入性，無需開刀\n- 效果可維持 1-2 年\n- 適合面部及頸部\n\n建議療程次數：每年 1-2 次",
+      "category": null,
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-22T22:10:03.388Z",
+      "updatedAt": "2026-04-22T22:10:03.388Z",
+      "duration": "60-90 分鐘",
+      "effect": "緊緻肌膚、提升輪廓、減淡皺紋、改善雙下巴",
+      "precaution": "術後一週內避免做臉、避免日曬、保濕要做好",
+      "suitable": "面部鬆弛者、想要V臉效果的人士、想改善法令紋的人",
+      "unsuitable": "孕婦、心臟病患者、皮膚發炎者、有植入物者",
+      "docType": "SERVICE",
+      "discountPrice": "HK$4980",
+      "faqItems": [
+        {
+          "answer": "過程可能有輕微痠痛感，但一般都可以接受。",
+          "question": "HIFU 會痛嗎？"
+        },
+        {
+          "answer": "一般 2-3 個月後效果最明顯，可維持 1-2 年。",
+          "question": "幾耐見效？"
+        },
+        {
+          "answer": "通常一次就有明顯效果，建議每年做 1-2 次維持。",
+          "question": "做幾多次先有效？"
+        }
+      ],
+      "price": "HK$6980",
+      "steps": [],
+      "aliases": [
+        "HIFU",
+        "超聲波刀",
+        "緊緻療程",
+        "提升輪廓",
+        "HIFU瘦面"
+      ]
+    },
+    {
+      "id": "cmo3rpuxd000nno283cqg5n38",
+      "tenantId": "demo-tenant",
+      "title": "HIFU 高強度聚焦超聲波",
+      "content": "分類：緊緻提升\n\n功效：\n- 深層收緊面部及頸部組織\n- 改善面部鬆弛下垂\n- 提升輪廓線條（V 臉效果）\n- 刺激深層膠原蛋白增生\n- 效果可持續 12-18 個月\n\n適合人群：\n- 面部開始出現鬆弛人士（通常 28 歲以上）\n- 有雙下巴困擾人士\n- 輪廓線條不清晰人士\n- 希望非手術提升效果人士\n\n不適合人群：\n- 面部有金屬植入物（螺絲、鋼板）\n- 懷孕或哺乳期人士\n- 面部有嚴重活躍性暗瘡\n- 有蟹足腫病史\n- 面部曾注射大量填充物人士（需評估）\n\n推薦配搭：\n- 抗衰老緊緻療程：HIFU 做深層，Facial 做表層，全面對抗衰老\n- 激光嫩膚：HIFU 改善結構鬆弛，激光改善皮膚質素",
+      "category": "緊緻提升",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:00.817Z",
+      "updatedAt": "2026-04-18T03:19:00.817Z",
+      "duration": "約 60-90 分鐘（視乎治療範圍）",
+      "effect": "- 深層收緊面部及頸部組織\n- 改善面部鬆弛下垂\n- 提升輪廓線條（V 臉效果）\n- 刺激深層膠原蛋白增生\n- 效果可持續 12-18 個月",
+      "precaution": "- 療程後面部可能輕微紅腫、麻痺感，屬正常，通常數小時至 1-2 天消退\n- 少數人士有輕微瘀青（1-2 週消退）\n- 效果在 1-3 個月內逐漸顯現（膠原增生需時）\n- 建議每 12-18 個月做一次維持效果",
+      "suitable": "- 面部開始出現鬆弛人士（通常 28 歲以上）\n- 有雙下巴困擾人士\n- 輪廓線條不清晰人士\n- 希望非手術提升效果人士",
+      "unsuitable": "- 面部有金屬植入物（螺絲、鋼板）\n- 懷孕或哺乳期人士\n- 面部有嚴重活躍性暗瘡\n- 有蟹足腫病史\n- 面部曾注射大量填充物人士（需評估）",
+      "docType": "SERVICE",
+      "discountPrice": "HKD 1,200",
+      "faqItems": [
+        {
+          "answer": "有一定程度的刺熱感及輕微痛楚，因人而異。我哋會提供痛楚管理方案（冰敷、按需要外敷麻醉膏）。",
+          "question": "HIFU 痛嗎？"
+        },
+        {
+          "answer": "部分人士做完即時感到輕微提升；完整效果在 2-3 個月後顯現，因為膠原增生需要時間。",
+          "question": "幾快見效？"
+        },
+        {
+          "answer": "一般 12-18 個月，視乎個人皮膚狀況及生活習慣。配合定期護膚療程效果更持久。",
+          "question": "效果可以維持幾耐？"
+        },
+        {
+          "answer": "HIFU 係非入侵性，無需恢復期，效果較手術輕微但自然。適合希望改善但唔想手術人士。",
+          "question": "同手術拉皮有咩分別？"
+        },
+        {
+          "answer": "可以，無需停工期。部分人士面部輕微泛紅，一般數小時消退。",
+          "question": "做完可以即日返工嗎？"
+        },
+        {
+          "answer": "28 歲以上均可，愈早開始預防性治療，效果愈理想。",
+          "question": "幾歲適合做 HIFU？"
+        }
+      ],
+      "price": "HKD 3,800",
+      "steps": [
+        "1. 潔面及皮膚評估",
+        "2. 拍照記錄（對比用）",
+        "3. 塗抹導電啫喱",
+        "4. HIFU 儀器治療（額頭、臉頰、下巴、頸部）",
+        "5. 鎮靜修護",
+        "6. 防曬收尾"
+      ],
+      "aliases": [
+        "HIFU 高強度聚焦超聲波",
+        "HIFU",
+        "高強度聚焦超聲波"
+      ]
+    },
+    {
+      "id": "svc-ipl",
+      "tenantId": "demo-tenant",
+      "title": "IPL 彩光嫩膚",
+      "content": "IPL 彩光嫩膚利用脈衝光能量，針對黑色素，達到淡斑嫩膚效果。\n\n療程優點：\n- 無創傷性\n- 恢復期短\n- 可改善多種肌膚問題\n\n建議療程次數：4-6 次（每 2-3 週一次）",
+      "category": null,
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-22T22:10:04.360Z",
+      "updatedAt": "2026-04-22T22:10:04.360Z",
+      "duration": "30-45 分鐘",
+      "effect": "改善色斑、均勻膚色、收細毛孔、減淡細紋",
+      "precaution": "療程後需加強防曬，一週內避免使用美白產品",
+      "suitable": "有曬斑、雀斑、膚色不均者",
+      "unsuitable": "孕婦、光敏感肌膚、剛曬太陽者",
+      "docType": "SERVICE",
+      "discountPrice": "HK$498",
+      "faqItems": [
+        {
+          "answer": "過程會有輕微溫熱感，似橡皮筋彈一下，一般可以接受。",
+          "question": "IPL 會痛嗎？"
+        },
+        {
+          "answer": "可能有輕微泛紅，通常數小時內消退。",
+          "question": "做完會唔會紅？"
+        },
+        {
+          "answer": "一般 2-3 次後開始見到效果，完成整個療程效果最佳。",
+          "question": "幾耐見效？"
+        }
+      ],
+      "price": "HK$800",
+      "steps": [],
+      "aliases": [
+        "IPL",
+        "彩光",
+        "彩光嫩膚",
+        "嫩膚療程",
+        "去斑"
+      ]
+    },
+    {
+      "id": "cmo3rpwhy000tno28g6xuiomd",
+      "tenantId": "demo-tenant",
+      "title": "全身去角質療程",
+      "content": "分類：身體護理\n\n功效：\n- 去除全身老廢角質\n- 提亮身體膚色\n- 改善雞皮膚（毛囊角化症）\n- 令後續護膚品吸收更好\n\n適合人群：\n- 身體膚色暗啞人士\n- 有雞皮膚困擾人士\n- 做身體美白前準備\n- 任何人士（基本身體護理）\n\n推薦配搭：\n- 身體美白療程：去角質後做美白，吸收提升 40%",
+      "category": "身體護理",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:02.855Z",
+      "updatedAt": "2026-04-18T03:19:02.855Z",
+      "duration": "約 60 分鐘",
+      "effect": "- 去除全身老廢角質\n- 提亮身體膚色\n- 改善雞皮膚（毛囊角化症）\n- 令後續護膚品吸收更好",
+      "precaution": null,
+      "suitable": "- 身體膚色暗啞人士\n- 有雞皮膚困擾人士\n- 做身體美白前準備\n- 任何人士（基本身體護理）",
+      "unsuitable": null,
+      "docType": "SERVICE",
+      "discountPrice": "HKD 580",
+      "faqItems": [
+        {
+          "answer": "唔建議，去角質後皮膚較敏感，要做好防曬。",
+          "question": "做完可以即刻去曬太陽嗎？"
+        }
+      ],
+      "price": "HKD 1,280",
+      "steps": [],
+      "aliases": [
+        "全身去角質療程"
+      ]
+    },
+    {
+      "id": "cmo3rpy03000zno28mnbbo00u",
+      "tenantId": "demo-tenant",
+      "title": "凝膠甲（Gel Nail）",
+      "content": "分類：美甲\n\n功效：\n- 持久亮澤（2-3 週）\n- 保護天然指甲\n- 多款顏色及設計選擇",
+      "category": "美甲",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:04.804Z",
+      "updatedAt": "2026-04-18T03:19:04.804Z",
+      "duration": "約 60-90 分鐘",
+      "effect": "- 持久亮澤（2-3 週）\n- 保護天然指甲\n- 多款顏色及設計選擇",
+      "precaution": null,
+      "suitable": null,
+      "unsuitable": null,
+      "docType": "SERVICE",
+      "discountPrice": null,
+      "faqItems": [
+        {
+          "answer": "一般 2-3 週，視乎指甲生長速度。",
+          "question": "凝膠甲幾耐要補做？"
+        },
+        {
+          "answer": "專業卸甲唔會傷害，切勿自行強行剝除。",
+          "question": "卸甲會唔會傷甲？"
+        },
+        {
+          "answer": "懷孕初期建議避免，中後期可以，但請告知美甲師。",
+          "question": "懷孕可以做嗎？"
+        }
+      ],
+      "price": "HKD 280（素色）/ HKD 380（漸層/法式）/ HKD 480（甲繪/貼紙）",
+      "steps": [],
+      "aliases": [
+        "凝膠甲（Gel Nail）",
+        "Gel Nail",
+        "凝膠甲"
+      ]
+    },
+    {
+      "id": "cmo3rq04t0017no28f3m5yffo",
+      "tenantId": "demo-tenant",
+      "title": "婚前全身準備套餐",
+      "content": "分類：套餐\n【包含項目】\n- 美白嫩膚 Facial × 6\n- 全身去角質 × 3\n- 身體美白 × 3\n- 眼部護理 × 3\n- 凝膠甲 × 1\n\n項目數量：5 項\n\n【有效期／使用期限】\n建議婚前 3 個月開始",
+      "category": "套餐",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:07.565Z",
+      "updatedAt": "2026-04-18T03:19:07.565Z",
+      "duration": null,
+      "effect": null,
+      "precaution": null,
+      "suitable": null,
+      "unsuitable": null,
+      "docType": "SERVICE",
+      "discountPrice": "HKD 5,800（原價 HKD 8,640）",
+      "faqItems": null,
+      "price": "HKD 8,640",
+      "steps": [],
+      "aliases": [
+        "婚前全身準備套餐"
+      ]
+    },
+    {
+      "id": "cmo3rpvh8000pno2863wu06t1",
+      "tenantId": "demo-tenant",
+      "title": "射頻（RF）緊緻療程",
+      "content": "分類：緊緻提升\n\n功效：\n- 加熱真皮層，促進膠原收緊\n- 改善面部及身體鬆弛\n- 溶脂塑形（身體部位）\n- 改善橙皮紋\n\n適合人群：\n- 面部輕度至中度鬆弛\n- 有橙皮紋困擾\n- 產後修復人士\n\n推薦配搭：\n- HIFU：深淺層同時處理，效果最全面",
+      "category": "緊緻提升",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:01.532Z",
+      "updatedAt": "2026-04-18T03:19:01.532Z",
+      "duration": "約 60 分鐘",
+      "effect": "- 加熱真皮層，促進膠原收緊\n- 改善面部及身體鬆弛\n- 溶脂塑形（身體部位）\n- 改善橙皮紋",
+      "precaution": null,
+      "suitable": "- 面部輕度至中度鬆弛\n- 有橙皮紋困擾\n- 產後修復人士",
+      "unsuitable": null,
+      "docType": "SERVICE",
+      "discountPrice": "HKD 880",
+      "faqItems": [
+        {
+          "answer": "射頻作用於較淺層，溫和舒適，適合日常維護；HIFU 作用更深層，效果更強勁持久。可以配合使用。",
+          "question": "射頻同 HIFU 有咩分別？"
+        }
+      ],
+      "price": "HKD 2,200",
+      "steps": [],
+      "aliases": [
+        "射頻（RF）緊緻療程",
+        "RF",
+        "射頻緊緻"
+      ]
+    },
+    {
+      "id": "cmo3rpsv9000fno283pr6tyss",
+      "tenantId": "demo-tenant",
+      "title": "少女煥膚療程（學生優惠）",
+      "content": "分類：臉部護理\n\n功效：\n- 溫和去角質，提亮膚色\n- 輕度控油及補水平衡\n- 適合年輕肌膚日常護理\n\n適合人群：\n- 16-25 歲年輕人士\n- 學生（憑學生證享優惠）\n- 首次嘗試美容療程人士",
+      "category": "臉部護理",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:18:58.150Z",
+      "updatedAt": "2026-04-18T03:18:58.150Z",
+      "duration": "約 60 分鐘",
+      "effect": "- 溫和去角質，提亮膚色\n- 輕度控油及補水平衡\n- 適合年輕肌膚日常護理",
+      "precaution": null,
+      "suitable": "- 16-25 歲年輕人士\n- 學生（憑學生證享優惠）\n- 首次嘗試美容療程人士",
+      "unsuitable": null,
+      "docType": "SERVICE",
+      "discountPrice": "HKD 380",
+      "faqItems": [
+        {
+          "answer": "16 歲以上即可，未成年人士需家長陪同或書面同意。",
+          "question": "幾歲可以開始做美容？"
+        }
+      ],
+      "price": "HKD 880",
+      "steps": [],
+      "aliases": [
+        "少女煥膚療程（學生優惠）",
+        "學生優惠"
+      ]
+    },
+    {
+      "id": "cmo3rpucy000lno28hk65f7wv",
+      "tenantId": "demo-tenant",
+      "title": "彩光（IPL）嫩膚",
+      "content": "分類：激光療程\n\n功效：\n- 同時改善色斑、毛孔及膚色\n- 收細毛孔\n- 改善玫瑰痤瘡泛紅\n- 刺激膠原增生\n\n適合人群：\n- 希望全面改善膚質人士\n- 有輕度色斑同時毛孔粗大人士\n- 玫瑰痤瘡輕度患者\n\n不適合人群：\n- 膚色較深人士（IV 型以上，風險較高）\n- 懷孕人士\n- 近期曬傷人士\n\n推薦配搭：\n- 補水保濕療程：光療後補水修護\n- 美白嫩膚 Facial：加強美白效果",
+      "category": "激光療程",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:00.082Z",
+      "updatedAt": "2026-04-18T03:19:00.082Z",
+      "duration": "約 45 分鐘",
+      "effect": "- 同時改善色斑、毛孔及膚色\n- 收細毛孔\n- 改善玫瑰痤瘡泛紅\n- 刺激膠原增生",
+      "precaution": null,
+      "suitable": "- 希望全面改善膚質人士\n- 有輕度色斑同時毛孔粗大人士\n- 玫瑰痤瘡輕度患者",
+      "unsuitable": "- 膚色較深人士（IV 型以上，風險較高）\n- 懷孕人士\n- 近期曬傷人士",
+      "docType": "SERVICE",
+      "discountPrice": "HKD 780",
+      "faqItems": [
+        {
+          "answer": "IPL 係寬頻光，一次可以針對多種問題；激光係單一波長，針對性更強。IPL 較溫和，適合整體改善。",
+          "question": "IPL 同激光有咩分別？"
+        }
+      ],
+      "price": "HKD 1,800",
+      "steps": [],
+      "aliases": [
+        "彩光（IPL）嫩膚",
+        "IPL",
+        "彩光嫩膚"
+      ]
+    },
+    {
+      "id": "cmo3rpyxz0013no28b1705ycs",
+      "tenantId": "demo-tenant",
+      "title": "抗衰老全護套餐",
+      "content": "分類：套餐\n適合人群：\n- 30 歲以上希望全面抗衰老人士\n- 想要系統性護膚計劃人士\n【包含項目】\n- HIFU 緊緻提升 × 1\n- 抗衰老緊緻療程 × 3\n- 激光嫩膚 × 2\n- 補水保濕療程 × 3\n\n項目數量：4 項\n\n【有效期／使用期限】\n6 個月",
+      "category": "套餐",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:06.023Z",
+      "updatedAt": "2026-04-18T03:19:06.023Z",
+      "duration": null,
+      "effect": null,
+      "precaution": null,
+      "suitable": "- 30 歲以上希望全面抗衰老人士\n- 想要系統性護膚計劃人士",
+      "unsuitable": null,
+      "docType": "SERVICE",
+      "discountPrice": "HKD 4,800（原價 HKD 7,180）",
+      "faqItems": null,
+      "price": "HKD 7,180",
+      "steps": [],
+      "aliases": [
+        "抗衰老全護套餐"
+      ]
+    },
+    {
+      "id": "cmo3rppsb0007no28b1nix0at",
+      "tenantId": "demo-tenant",
+      "title": "抗衰老緊緻療程",
+      "content": "分類：臉部護理\n\n功效：\n- 刺激膠原蛋白增生\n- 改善面部鬆弛下垂\n- 淡化法令紋、眼角紋\n- 提升輪廓線條\n\n適合人群：\n- 25 歲以上開始注意抗衰老人士\n- 面部輪廓開始鬆弛人士\n- 有法令紋、眼角紋困擾人士\n- 希望預防衰老人士\n\n不適合人群：\n- 面部有金屬植入物人士\n- 懷孕人士\n- 嚴重皮膚病人士\n\n推薦配搭：\n- HIFU 緊緻提升：兩者結合，地基（Facial）加結構（HIFU），效果更全面\n- 補水保濕療程：抗衰老必須配合補水，否則膠原生成效率降低",
+      "category": "臉部護理",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:18:53.810Z",
+      "updatedAt": "2026-04-18T03:18:53.810Z",
+      "duration": "約 90 分鐘",
+      "effect": "- 刺激膠原蛋白增生\n- 改善面部鬆弛下垂\n- 淡化法令紋、眼角紋\n- 提升輪廓線條",
+      "precaution": "- 療程後 24-48 小時面部可能輕微泛紅\n- 避免高溫環境 48 小時\n- 做好保濕及防曬\n- 建議每月做一次維持效果",
+      "suitable": "- 25 歲以上開始注意抗衰老人士\n- 面部輪廓開始鬆弛人士\n- 有法令紋、眼角紋困擾人士\n- 希望預防衰老人士",
+      "unsuitable": "- 面部有金屬植入物人士\n- 懷孕人士\n- 嚴重皮膚病人士",
+      "docType": "SERVICE",
+      "discountPrice": "HKD 680",
+      "faqItems": [
+        {
+          "answer": "呢個療程係非入侵性，較溫和，適合預防及輕度鬆弛；HIFU 效果更深層強勁，適合明顯鬆弛問題。",
+          "question": "同 HIFU 有咩分別？"
+        },
+        {
+          "answer": "25 歲以上便可以開始預防性療程，30-40 歲最多人做。",
+          "question": "幾歲開始做合適？"
+        },
+        {
+          "answer": "一般 3 次後明顯感受到輪廓提升，建議做足 6 次一個療程。",
+          "question": "做幾次先見效？"
+        }
+      ],
+      "price": "HKD 1,580",
+      "steps": [
+        "1. 深層潔面",
+        "2. 微電流提升按摩（提拉輪廓）",
+        "3. 射頻儀器緊緻（刺激膠原）",
+        "4. 膠原蛋白精華導入",
+        "5. 緊緻提升面膜",
+        "6. 眼部特別護理"
+      ],
+      "aliases": [
+        "抗衰老緊緻療程"
+      ]
+    },
+    {
+      "id": "cmo3rpruk000bno28x243pmmh",
+      "tenantId": "demo-tenant",
+      "title": "敏感肌修護療程",
+      "content": "分類：臉部護理\n\n功效：\n- 修護受損皮膚屏障\n- 減少泛紅及敏感反應\n- 舒緩過敏症狀\n- 增強肌膚抵抗力\n\n適合人群：\n- 敏感肌膚、容易泛紅人士\n- 換季皮膚不穩定人士\n- 對外界刺激反應強烈人士\n- 玫瑰痤瘡輕度患者\n\n不適合人群：\n- 嚴重濕疹發作期間\n- 皮膚有開放性傷口\n\n推薦配搭：\n- 補水保濕療程：敏感肌通常同時缺水，補水後屏障修護效果更好\n- LED 光療：加強消炎鎮靜效果",
+      "category": "臉部護理",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:18:56.828Z",
+      "updatedAt": "2026-04-18T03:18:56.828Z",
+      "duration": "約 65 分鐘",
+      "effect": "- 修護受損皮膚屏障\n- 減少泛紅及敏感反應\n- 舒緩過敏症狀\n- 增強肌膚抵抗力",
+      "precaution": "- 72 小時內避免含香精護膚品\n- 避免高溫、辛辣食物\n- 戶外做好防曬（物理防曬為主）",
+      "suitable": "- 敏感肌膚、容易泛紅人士\n- 換季皮膚不穩定人士\n- 對外界刺激反應強烈人士\n- 玫瑰痤瘡輕度患者",
+      "unsuitable": "- 嚴重濕疹發作期間\n- 皮膚有開放性傷口",
+      "docType": "SERVICE",
+      "discountPrice": "HKD 520",
+      "faqItems": [
+        {
+          "answer": "可以，但要選擇適合的療程。我們的敏感肌系列全程使用低敏配方，安全性高。",
+          "question": "敏感肌可以長期做美容嗎？"
+        },
+        {
+          "answer": "輕度玫瑰痤瘡可以，但嚴重者建議先諮詢皮膚科醫生。",
+          "question": "玫瑰痤瘡可以做嗎？"
+        }
+      ],
+      "price": "HKD 1,200",
+      "steps": [
+        "1. 溫和低敏潔面",
+        "2. 皮膚屏障評估",
+        "3. 積雪草修護精華舒緩",
+        "4. LED 紅光治療（消炎鎮靜）",
+        "5. 修護冷膜",
+        "6. 無香低敏護膚收尾"
+      ],
+      "aliases": [
+        "敏感肌修護療程"
+      ]
+    },
+    {
+      "id": "cmo3rpygy0011no28h2ep0fpf",
+      "tenantId": "demo-tenant",
+      "title": "新客三合一體驗套餐",
+      "content": "分類：套餐\n適合人群：\n- 首次到訪新客戶\n- 希望全面體驗不同療程人士\n【包含項目】\n- 深層清潔 Facial（試做價 HKD 480）\n- 眼部特別護理（試做價 HKD 480）\n- 補水保濕療程（試做價 HKD 480）\n\n項目數量：3 項\n\n【限制／注意】\n- 每位新客戶限購一次\n- 需於購買後 3 個月內使用完畢\n- 可分 1-3 次使用",
+      "category": "套餐",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:05.410Z",
+      "updatedAt": "2026-04-18T03:19:05.410Z",
+      "duration": null,
+      "effect": null,
+      "precaution": null,
+      "suitable": "- 首次到訪新客戶\n- 希望全面體驗不同療程人士",
+      "unsuitable": null,
+      "docType": "SERVICE",
+      "discountPrice": "HKD 1,280（原價 HKD 2,260）",
+      "faqItems": [
+        {
+          "answer": "可以，3 個療程可以分開最多 3 次預約使用。",
+          "question": "套餐可以分開日期使用嗎？"
+        }
+      ],
+      "price": "HKD 2,260",
+      "steps": [],
+      "aliases": [
+        "新客三合一體驗套餐",
+        "新客三合一",
+        "三合一體驗"
+      ]
+    },
+    {
+      "id": "cmo3rprag0009no2880rqjp9f",
+      "tenantId": "demo-tenant",
+      "title": "暗瘡修護療程",
+      "content": "分類：臉部護理\n\n功效：\n- 殺菌消炎，減少暗瘡形成\n- 修護暗瘡後色素及疤痕\n- 調節油脂分泌\n- 收細毛孔，減少暗瘡復發\n\n適合人群：\n- 有暗瘡困擾（任何年齡）\n- 油性及混合性皮膚\n- 暗瘡印、暗瘡疤人士\n\n不適合人群：\n- 正在服用異維A酸（Roaccutane）人士\n- 嚴重囊腫性暗瘡（建議先見皮膚科）\n- 懷孕人士\n\n推薦配搭：\n- 激光嫩膚：暗瘡穩定後改善疤痕及色素\n- 深層清潔 Facial：定期清潔預防暗瘡復發",
+      "category": "臉部護理",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:18:56.105Z",
+      "updatedAt": "2026-04-18T03:18:56.105Z",
+      "duration": "約 80 分鐘",
+      "effect": "- 殺菌消炎，減少暗瘡形成\n- 修護暗瘡後色素及疤痕\n- 調節油脂分泌\n- 收細毛孔，減少暗瘡復發",
+      "precaution": "- 避免用手觸碰面部\n- 暫停使用含酒精或去角質產品\n- 飲食清淡，減少高糖高脂食物\n- 做好防曬",
+      "suitable": "- 有暗瘡困擾（任何年齡）\n- 油性及混合性皮膚\n- 暗瘡印、暗瘡疤人士",
+      "unsuitable": "- 正在服用異維A酸（Roaccutane）人士\n- 嚴重囊腫性暗瘡（建議先見皮膚科）\n- 懷孕人士",
+      "docType": "SERVICE",
+      "discountPrice": "HKD 580",
+      "faqItems": [
+        {
+          "answer": "初次療程後少數人士會有輕微「爆發期」，屬正常排毒現象，一般 1 週內平復，之後明顯改善。",
+          "question": "做完會唔會爆發更多暗瘡？"
+        },
+        {
+          "answer": "新鮮暗瘡印（紅色/粉紅色）改善效果顯著；陳舊疤痕需要配合激光療程。",
+          "question": "暗瘡疤可以完全消除嗎？"
+        },
+        {
+          "answer": "暗瘡活躍期間唔建議做激光，待暗瘡穩定後再配合。",
+          "question": "同時可以做激光祛斑嗎？"
+        }
+      ],
+      "price": "HKD 1,280",
+      "steps": [
+        "1. 抗菌潔面",
+        "2. 水楊酸溫和去角質",
+        "3. 人手處理白頭粉刺",
+        "4. 高頻殺菌儀器（直接針對暗瘡）",
+        "5. 消炎修護精華",
+        "6. 控油修護面膜",
+        "7. 無油保濕收尾"
+      ],
+      "aliases": [
+        "暗瘡修護療程"
+      ]
+    },
+    {
+      "id": "cmo3rpml50001no28o4lyrkax",
+      "tenantId": "demo-tenant",
+      "title": "深層清潔 Facial",
+      "content": "分類：臉部護理\n\n功效：\n- 深層清除毛孔污垢及老廢角質\n- 改善毛孔粗大問題\n- 提亮膚色，令肌膚更通透\n- 減少粉刺及暗瘡形成\n\n適合人群：\n- 毛孔粗大、容易出油人士\n- 經常化妝、妝容厚重人士\n- 肌膚暗啞、膚色不均人士\n- 首次試做美容療程人士\n\n不適合人群：\n- 活躍性暗瘡或嚴重皮膚發炎人士\n- 對超聲波儀器敏感人士\n- 懷孕初期（首三個月）人士\n\n推薦配搭：\n- 美白 Facial：清潔後做美白效果更顯著，因毛孔已打開，精華吸收更好\n- 補水保濕療程：清潔後皮膚需要補充水分，兩者配合效果最佳",
+      "category": "臉部護理",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:18:49.973Z",
+      "updatedAt": "2026-04-18T03:18:49.973Z",
+      "duration": "約 75 分鐘",
+      "effect": "- 深層清除毛孔污垢及老廢角質\n- 改善毛孔粗大問題\n- 提亮膚色，令肌膚更通透\n- 減少粉刺及暗瘡形成",
+      "precaution": "- 療程後 24 小時避免化妝\n- 避免接觸高溫環境（桑拿、溫泉）\n- 做好防曬，避免直接日曬\n- 多喝水，幫助代謝",
+      "suitable": "- 毛孔粗大、容易出油人士\n- 經常化妝、妝容厚重人士\n- 肌膚暗啞、膚色不均人士\n- 首次試做美容療程人士",
+      "unsuitable": "- 活躍性暗瘡或嚴重皮膚發炎人士\n- 對超聲波儀器敏感人士\n- 懷孕初期（首三個月）人士",
+      "docType": "SERVICE",
+      "discountPrice": "HKD 480",
+      "faqItems": [
+        {
+          "answer": "部分人士做完後可能有輕微泛紅，屬正常現象，一般 2-4 小時內消退。",
+          "question": "做完會唔會即時紅？"
+        },
+        {
+          "answer": "建議每 3-4 週做一次，配合皮膚新陳代謝週期。",
+          "question": "幾耐做一次好？"
+        },
+        {
+          "answer": "建議療程後 24 小時後再化妝，讓毛孔充分收縮。",
+          "question": "做完可以即日化妝嗎？"
+        },
+        {
+          "answer": "療程內容完全一樣，試做價係新客戶優惠，每位限用一次。",
+          "question": "試做價同正價有咩分別？"
+        }
+      ],
+      "price": "HKD 1,200",
+      "steps": [
+        "1. 卸妝潔面（約 10 分鐘）",
+        "2. 超聲波深層清潔，軟化毛孔污垢",
+        "3. 人手提取粉刺及角質",
+        "4. 高頻殺菌，收細毛孔",
+        "5. 鎮靜精華導入",
+        "6. 補水面膜（約 20 分鐘）",
+        "7. 防曬隔離收尾"
+      ],
+      "aliases": [
+        "深層清潔 Facial",
+        "Facial",
+        "深層清潔"
+      ]
+    },
+    {
+      "id": "svc-facial",
+      "tenantId": "demo-tenant",
+      "title": "深層清潔 Facial",
+      "content": "專業深層清潔 Facial 包含：\n1. 卸妝潔面\n2. 角質軟化\n3. 針清黑頭粉刺\n4. 收斂毛孔\n5. 保濕面膜\n6. 護膚品塗抹\n\n適合定期保養，建議每 3-4 週做一次。",
+      "category": null,
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-22T22:10:04.042Z",
+      "updatedAt": "2026-04-22T22:10:04.042Z",
+      "duration": "60 分鐘",
+      "effect": "深層清潔毛孔、去除黑頭粉刺、改善膚色暗沉",
+      "precaution": "術後 24 小時內避免化妝、做好保濕防曬",
+      "suitable": "油性肌膚、混合性肌膚、毛孔粗大者",
+      "unsuitable": "嚴重敏感肌、正在使用A酸者",
+      "docType": "SERVICE",
+      "discountPrice": "HK$298",
+      "faqItems": [
+        {
+          "answer": "部分人士做完後可能有輕微泛紅，屬正常現象，一般 2-4 小時內消退。",
+          "question": "做完會唔會即時紅？"
+        },
+        {
+          "answer": "建議每 3-4 週做一次，配合皮膚新陳代謝週期。",
+          "question": "幾耐做一次好？"
+        },
+        {
+          "answer": "建議療程後 24 小時後再化妝，讓毛孔充分收縮。",
+          "question": "做完可以即日化妝嗎？"
+        },
+        {
+          "answer": "療程內容完全一樣，試做價係新客戶優惠，每位限用一次。",
+          "question": "試做價同正價有咩分別？"
+        }
+      ],
+      "price": "HK$480",
+      "steps": [],
+      "aliases": [
+        "facial",
+        "清潔facial",
+        "深層清潔",
+        "潔面療程",
+        "洗面"
+      ]
+    },
+    {
+      "id": "cmo3rptw0000jno28usopdrz4",
+      "tenantId": "demo-tenant",
+      "title": "激光嫩膚療程",
+      "content": "分類：激光療程\n\n功效：\n- 刺激膠原蛋白增生\n- 改善細紋及毛孔粗大\n- 提亮整體膚色\n- 改善皮膚質感及彈性\n\n適合人群：\n- 毛孔粗大人士\n- 有細紋、皮膚老化困擾人士\n- 希望全面提升皮膚質素人士\n\n不適合人群：\n- 同激光祛斑療程\n\n推薦配搭：\n- 激光祛斑：同時改善色斑及膚質，一次過解決多個問題\n- HIFU 緊緻提升：激光改善表層，HIFU 改善深層結構，全面年輕化",
+      "category": "激光療程",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:18:59.472Z",
+      "updatedAt": "2026-04-18T03:18:59.472Z",
+      "duration": "約 50 分鐘",
+      "effect": "- 刺激膠原蛋白增生\n- 改善細紋及毛孔粗大\n- 提亮整體膚色\n- 改善皮膚質感及彈性",
+      "precaution": null,
+      "suitable": "- 毛孔粗大人士\n- 有細紋、皮膚老化困擾人士\n- 希望全面提升皮膚質素人士",
+      "unsuitable": "- 同激光祛斑療程",
+      "docType": "SERVICE",
+      "discountPrice": "HKD 950",
+      "faqItems": [
+        {
+          "answer": "嫩膚係全面改善皮膚質素（毛孔、細紋、膚色）；祛斑係針對去除特定色斑。兩者可以組合。",
+          "question": "激光嫩膚同激光祛斑有咩分別？"
+        },
+        {
+          "answer": "輕微脫皮屬正常現象，約 3-5 天完成，之後皮膚更幼滑。",
+          "question": "做完會脫皮嗎？"
+        }
+      ],
+      "price": "HKD 2,400",
+      "steps": [],
+      "aliases": [
+        "激光嫩膚療程"
+      ]
+    },
+    {
+      "id": "cmo3rptf6000hno28ps5gcoo8",
+      "tenantId": "demo-tenant",
+      "title": "激光祛斑療程",
+      "content": "分類：激光療程\n\n功效：\n- 針對性消除雀斑、曬斑、老人斑\n- 淡化色素沉澱\n- 均勻膚色\n- 改善皮膚整體質感\n\n適合人群：\n- 有雀斑、曬斑困擾人士\n- 色斑明顯、範圍集中人士\n- 希望針對性改善色素問題人士\n\n不適合人群：\n- 懷孕或哺乳期人士\n- 近期有過度日曬（皮膚曬傷）人士\n- 正服用光敏感藥物人士\n- 有蟹足腫病史人士\n- 近 2 週曾做果酸換膚人士\n\n推薦配搭：\n- 美白嫩膚 Facial：激光後配合美白 Facial 維護，加速改善及預防新色斑\n- 補水保濕療程：激光後皮膚較乾燥，補水修護必要",
+      "category": "激光療程",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:18:58.866Z",
+      "updatedAt": "2026-04-18T03:18:58.866Z",
+      "duration": "約 45 分鐘",
+      "effect": "- 針對性消除雀斑、曬斑、老人斑\n- 淡化色素沉澱\n- 均勻膚色\n- 改善皮膚整體質感",
+      "precaution": "- 治療後 1-2 天色斑可能暫時加深（正常反應）\n- 嚴格防曬最少 2 週（SPF 50+，每 2 小時補塗）\n- 避免高溫環境 1 週\n- 唔好自行撕走結痂（讓其自然脫落）\n- 避免用含果酸或A酸護膚品 2 週",
+      "suitable": "- 有雀斑、曬斑困擾人士\n- 色斑明顯、範圍集中人士\n- 希望針對性改善色素問題人士",
+      "unsuitable": "- 懷孕或哺乳期人士\n- 近期有過度日曬（皮膚曬傷）人士\n- 正服用光敏感藥物人士\n- 有蟹足腫病史人士\n- 近 2 週曾做果酸換膚人士",
+      "docType": "SERVICE",
+      "discountPrice": "HKD 880",
+      "faqItems": [
+        {
+          "answer": "有輕微刺熱感，大部分人可以接受。我哋會塗麻醉膏減少不適。",
+          "question": "激光祛斑痛嗎？"
+        },
+        {
+          "answer": "視乎色斑深淺，淺層色斑通常 1-2 次見效；深層色素需要 3-5 次。",
+          "question": "幾次可以完全去除色斑？"
+        },
+        {
+          "answer": "嚴格跟從療程後護理（尤其防曬），反黑機率極低。防曬係最重要一步。",
+          "question": "做完色斑會唔會反黑？"
+        },
+        {
+          "answer": "治療後 24-48 小時建議唔化妝，之後可以正常化妝。",
+          "question": "做激光期間可以化妝嗎？"
+        },
+        {
+          "answer": "Facial 美白係整體改善，激光係針對性消除特定色斑，兩者功能互補。",
+          "question": "同美白 Facial 有咩分別？"
+        }
+      ],
+      "price": "HKD 2,200",
+      "steps": [
+        "1. 潔面及皮膚評估",
+        "2. 標記治療區域",
+        "3. 激光儀器治療（Q-switch 或 Pico 激光）",
+        "4. 冰敷鎮靜",
+        "5. 修護精華塗抹",
+        "6. 嚴格防曬"
+      ],
+      "aliases": [
+        "激光祛斑療程"
+      ]
+    },
+    {
+      "id": "cmo3rpxfw000xno28am2rnk2k",
+      "tenantId": "demo-tenant",
+      "title": "激光脫毛（單個部位）",
+      "content": "分類：脫毛療程\n\n功效：\n- 永久減少毛髮生長\n- 改善毛囊炎\n- 令皮膚更光滑\n\n適合人群：\n- 任何有脫毛需求人士\n- 毛囊炎困擾人士\n\n不適合人群：\n- 懷孕人士\n- 近期曬傷部位\n- 正服用光敏感藥物人士",
+      "category": "脫毛療程",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:04.076Z",
+      "updatedAt": "2026-04-18T03:19:04.076Z",
+      "duration": "視乎部位（唇部約 10 分鐘 / 腿部約 45 分鐘）",
+      "effect": "- 永久減少毛髮生長\n- 改善毛囊炎\n- 令皮膚更光滑",
+      "precaution": null,
+      "suitable": "- 任何有脫毛需求人士\n- 毛囊炎困擾人士",
+      "unsuitable": "- 懷孕人士\n- 近期曬傷部位\n- 正服用光敏感藥物人士",
+      "docType": "SERVICE",
+      "discountPrice": "HKD 380（單部位）",
+      "faqItems": [
+        {
+          "answer": "有輕微彈橡皮筋感，大部分人可以接受。敏感部位可以申請外塗麻醉膏。",
+          "question": "激光脫毛痛嗎？"
+        },
+        {
+          "answer": "毛髮有生長週期，一般需要 6-8 次達到理想效果。",
+          "question": "幾次可以永久脫毛？"
+        },
+        {
+          "answer": "我哋使用適合亞洲膚色的儀器，安全有效。深色皮膚建議先諮詢。",
+          "question": "深色皮膚可以做嗎？"
+        },
+        {
+          "answer": "可以，男士脫毛需求日益普遍，鬍鬚、胸背均可處理。",
+          "question": "男士可以做嗎？"
+        }
+      ],
+      "price": "HKD 880（單部位）/ HKD 3,800（全身6次）",
+      "steps": [],
+      "aliases": [
+        "激光脫毛（單個部位）",
+        "單個部位"
+      ]
+    },
+    {
+      "id": "cmo3rpsc7000dno28wyoaqky1",
+      "tenantId": "demo-tenant",
+      "title": "男士護膚療程",
+      "content": "分類：臉部護理\n\n功效：\n- 深層清潔毛孔（男士毛孔較粗大）\n- 控油平衡\n- 鬚後修護，減少剃鬚刺激\n- 改善粗糙膚質\n\n適合人群：\n- 任何年齡男士\n- 油性皮膚男士\n- 有粉刺、暗瘡困擾男士\n- 經常剃鬚人士\n\n推薦配搭：\n- 深層清潔 Facial：男士皮膚油脂分泌多，配合深清效果更好",
+      "category": "臉部護理",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:18:57.463Z",
+      "updatedAt": "2026-04-18T03:18:57.463Z",
+      "duration": "約 70 分鐘",
+      "effect": "- 深層清潔毛孔（男士毛孔較粗大）\n- 控油平衡\n- 鬚後修護，減少剃鬚刺激\n- 改善粗糙膚質",
+      "precaution": null,
+      "suitable": "- 任何年齡男士\n- 油性皮膚男士\n- 有粉刺、暗瘡困擾男士\n- 經常剃鬚人士",
+      "unsuitable": null,
+      "docType": "SERVICE",
+      "discountPrice": "HKD 480",
+      "faqItems": [
+        {
+          "answer": "完全唔會，愈來愈多男士注重護膚，我哋有專門男士系列，環境私密舒適。",
+          "question": "男士做美容會唔會奇怪？"
+        },
+        {
+          "answer": "唔會，男士療程係護膚而非美化，效果係健康自然，唔會過度。",
+          "question": "做完會唔會顯得「太白」或「太靚」？"
+        }
+      ],
+      "price": "HKD 1,100",
+      "steps": [],
+      "aliases": [
+        "男士護膚療程"
+      ]
+    },
+    {
+      "id": "cmo3rpw0k000rno28c9snfwvv",
+      "tenantId": "demo-tenant",
+      "title": "眼部特別護理 Eye Treatment",
+      "content": "分類：眼部護理\n\n功效：\n- 淡化黑眼圈\n- 改善眼袋及浮腫\n- 減少魚尾紋及眼角細紋\n- 提亮眼周膚色\n- 舒緩眼部疲勞\n\n適合人群：\n- 有黑眼圈困擾（任何成因）\n- 眼袋、浮腫人士\n- 長期對住電腦、手機人士\n- 眼周有細紋人士\n\n不適合人群：\n- 眼部有急性感染或發炎\n- 曾做眼部手術未完全復原人士\n\n推薦配搭：\n- 抗衰老緊緻療程：眼部護理加面部緊緻，全面改善老化問題",
+      "category": "眼部護理",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:02.229Z",
+      "updatedAt": "2026-04-18T03:19:02.229Z",
+      "duration": "約 45 分鐘",
+      "effect": "- 淡化黑眼圈\n- 改善眼袋及浮腫\n- 減少魚尾紋及眼角細紋\n- 提亮眼周膚色\n- 舒緩眼部疲勞",
+      "precaution": "- 避免用力揉眼\n- 減少長時間看屏幕\n- 充足睡眠配合效果更佳",
+      "suitable": "- 有黑眼圈困擾（任何成因）\n- 眼袋、浮腫人士\n- 長期對住電腦、手機人士\n- 眼周有細紋人士",
+      "unsuitable": "- 眼部有急性感染或發炎\n- 曾做眼部手術未完全復原人士",
+      "docType": "SERVICE",
+      "discountPrice": "HKD 480",
+      "faqItems": [
+        {
+          "answer": "視乎成因。血液循環型（偏紫藍色）效果最好；色素型（偏啡色）需配合美白療程；結構型（眼袋凹陷）效果有限。",
+          "question": "黑眼圈係咪一定能改善？"
+        },
+        {
+          "answer": "輕微浮腫型眼袋可以明顯改善；脂肪型眼袋（按壓唔消）需要醫學療程。",
+          "question": "眼袋可以完全消除嗎？"
+        },
+        {
+          "answer": "建議每 2-3 週做一次，連續 4-6 次為一個療程。",
+          "question": "幾耐做一次？"
+        }
+      ],
+      "price": "HKD 1,200",
+      "steps": [
+        "1. 眼部卸妝",
+        "2. 眼周穴位按摩（促進循環）",
+        "3. 眼部精華電離子導入",
+        "4. 微電流眼部提升",
+        "5. 膠原蛋白眼膜（20 分鐘）",
+        "6. 鎖水眼霜收尾"
+      ],
+      "aliases": [
+        "眼部特別護理 Eye Treatment",
+        "Eye Treatment",
+        "眼部特別護理",
+        "眼部護理"
+      ]
+    },
+    {
+      "id": "cmo3rpnte0003no285gmqcszz",
+      "tenantId": "demo-tenant",
+      "title": "美白嫩膚 Facial",
+      "content": "分類：臉部護理\n\n功效：\n- 淡化色斑、曬斑及色素沉澱\n- 均勻膚色，提升整體亮度\n- 抑制黑色素生成\n- 改善暗黃及疲憊膚色\n\n適合人群：\n- 膚色暗黃、不均勻人士\n- 有曬斑、雀斑困擾人士\n- 希望提亮膚色人士\n- 日常有防曬需求但膚色仍偏暗人士\n\n不適合人群：\n- 對維他命C或熊果素敏感人士\n- 活躍性暗瘡人士\n- 懷孕或哺乳期人士\n\n推薦配搭：\n- 激光祛斑：針對頑固色斑，Facial 美白作日常維護，激光作集中改善\n- 深層清潔 Facial：先清潔再美白，精華吸收效果提升 30%",
+      "category": "臉部護理",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:18:51.602Z",
+      "updatedAt": "2026-04-18T03:18:51.602Z",
+      "duration": "約 80 分鐘",
+      "effect": "- 淡化色斑、曬斑及色素沉澱\n- 均勻膚色，提升整體亮度\n- 抑制黑色素生成\n- 改善暗黃及疲憊膚色",
+      "precaution": "- 嚴格做好防曬（SPF 50+），否則效果大打折扣\n- 避免進食感光食物（芹菜、檸檬、九層塔）\n- 療程後皮膚較敏感，避免用含酒精護膚品\n- 建議連續做 4-6 次效果更明顯",
+      "suitable": "- 膚色暗黃、不均勻人士\n- 有曬斑、雀斑困擾人士\n- 希望提亮膚色人士\n- 日常有防曬需求但膚色仍偏暗人士",
+      "unsuitable": "- 對維他命C或熊果素敏感人士\n- 活躍性暗瘡人士\n- 懷孕或哺乳期人士",
+      "docType": "SERVICE",
+      "discountPrice": "HKD 580",
+      "faqItems": [
+        {
+          "answer": "一般 2-3 次後開始見到膚色改善，建議做完一個療程（6次）效果最穩定。",
+          "question": "幾次先見效？"
+        },
+        {
+          "answer": "唔會。療程係幫助改善現有問題，只要配合防曬護膚，效果可以持續。",
+          "question": "會唔會愈做愈依賴？"
+        },
+        {
+          "answer": "Facial 美白較溫和，適合輕度色素問題；激光針對性更強，適合頑固色斑。兩者可以配合使用。",
+          "question": "同激光美白有咩分別？"
+        },
+        {
+          "answer": "可以，但建議先做皮膚測試，並告知美容師皮膚狀況，我們會調整療程配方。",
+          "question": "敏感皮膚可以做嗎？"
+        }
+      ],
+      "price": "HKD 1,380",
+      "steps": [
+        "1. 雙重潔面",
+        "2. 果酸溫和去角質",
+        "3. 美白精華超聲波導入",
+        "4. 冷凍光子美白儀器治療",
+        "5. 美白安瓶集中修護",
+        "6. 美白補水面膜",
+        "7. 防曬隔離"
+      ],
+      "aliases": [
+        "美白嫩膚 Facial",
+        "Facial"
+      ]
+    },
+    {
+      "id": "cmo3rpzn80015no28nablhfj4",
+      "tenantId": "demo-tenant",
+      "title": "美白淡斑套餐",
+      "content": "分類：套餐\n【包含項目】\n- 激光祛斑 × 2\n- 美白嫩膚 Facial × 4\n- 補水保濕療程 × 2\n\n項目數量：3 項\n\n【有效期／使用期限】\n4 個月",
+      "category": "套餐",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:06.932Z",
+      "updatedAt": "2026-04-18T03:19:06.932Z",
+      "duration": null,
+      "effect": null,
+      "precaution": null,
+      "suitable": null,
+      "unsuitable": null,
+      "docType": "SERVICE",
+      "discountPrice": "HKD 3,200（原價 HKD 5,060）",
+      "faqItems": null,
+      "price": "HKD 5,060",
+      "steps": [],
+      "aliases": [
+        "美白淡斑套餐"
+      ]
+    },
+    {
+      "id": "cmo3rpou50005no28t3e9nt4f",
+      "tenantId": "demo-tenant",
+      "title": "補水保濕療程",
+      "content": "分類：臉部護理\n\n功效：\n- 深層補充肌膚水分\n- 改善乾紋及細紋\n- 增強肌膚屏障功能\n- 令肌膚持久水潤有光澤\n\n適合人群：\n- 肌膚乾燥、緊繃人士\n- 冬季或長時間處於冷氣環境人士\n- 有細紋困擾人士\n- 敏感肌膚人士（溫和配方）\n\n不適合人群：\n- 對玻尿酸或膠原蛋白成分敏感人士（罕見）\n\n推薦配搭：\n- 抗衰老療程：補水係抗衰老基礎，兩者配合效果更全面\n- 美白嫩膚 Facial：補水後做美白，精華滲透更深",
+      "category": "臉部護理",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:18:52.925Z",
+      "updatedAt": "2026-04-18T03:18:52.925Z",
+      "duration": "約 70 分鐘",
+      "effect": "- 深層補充肌膚水分\n- 改善乾紋及細紋\n- 增強肌膚屏障功能\n- 令肌膚持久水潤有光澤",
+      "precaution": "- 療程後避免用去角質產品最少 3 天\n- 建議配合家居保濕護膚程序\n- 多喝水效果更佳",
+      "suitable": "- 肌膚乾燥、緊繃人士\n- 冬季或長時間處於冷氣環境人士\n- 有細紋困擾人士\n- 敏感肌膚人士（溫和配方）",
+      "unsuitable": "- 對玻尿酸或膠原蛋白成分敏感人士（罕見）",
+      "docType": "SERVICE",
+      "discountPrice": "HKD 480",
+      "faqItems": [
+        {
+          "answer": "係，大部分客人做完即時感到肌膚水潤、緊緻，妝容更伏貼。",
+          "question": "做完即刻有效果嗎？"
+        },
+        {
+          "answer": "兩種膚質都適合，美容師會根據你的膚質調整用品濃度。",
+          "question": "乾性同混合性皮膚都適合嗎？"
+        },
+        {
+          "answer": "可以，我哋有孕婦專用配方，請預約時告知。",
+          "question": "孕婦可以做嗎？"
+        }
+      ],
+      "price": "HKD 1,100",
+      "steps": [
+        "1. 溫和潔面",
+        "2. 保濕精華超音波導入",
+        "3. 玻尿酸安瓶集中補水",
+        "4. 凍膜或水凝面膜（30 分鐘）",
+        "5. 鎖水乳霜收尾"
+      ],
+      "aliases": [
+        "補水保濕療程",
+        "補水保濕"
+      ]
+    },
+    {
+      "id": "cmo3rpwz4000vno2850k430bf",
+      "tenantId": "demo-tenant",
+      "title": "身體美白療程",
+      "content": "分類：身體護理\n\n功效：\n- 全身均勻美白\n- 改善手肘、膝蓋等深色部位\n- 淡化妊娠紋色素\n\n適合人群：\n- 膚色不均人士\n- 曬後修護需求人士\n- 婚前美白備婚人士",
+      "category": "身體護理",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:03.472Z",
+      "updatedAt": "2026-04-18T03:19:03.472Z",
+      "duration": "約 75 分鐘",
+      "effect": "- 全身均勻美白\n- 改善手肘、膝蓋等深色部位\n- 淡化妊娠紋色素",
+      "precaution": null,
+      "suitable": "- 膚色不均人士\n- 曬後修護需求人士\n- 婚前美白備婚人士",
+      "unsuitable": null,
+      "docType": "SERVICE",
+      "discountPrice": "HKD 780",
+      "faqItems": [
+        {
+          "answer": "建議婚前 3 個月開始，每 2 週一次，效果最理想。",
+          "question": "婚前幾耐開始做好？"
+        }
+      ],
+      "price": "HKD 1,800",
+      "steps": [],
+      "aliases": [
+        "身體美白療程"
+      ]
+    },
+    {
+      "id": "faq-payment",
+      "tenantId": "demo-tenant",
+      "title": "付款方式",
+      "content": "我們接受以下付款方式：\n\n1. 現金\n2. 信用卡（Visa、MasterCard、AE）\n3. 支付寶\n4. 微信支付\n5. 轉數快\n\n所有價格已包含香港稅項。",
+      "category": null,
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-20T11:22:52.518Z",
+      "updatedAt": "2026-04-22T22:10:05.018Z",
+      "duration": null,
+      "effect": null,
+      "precaution": null,
+      "suitable": null,
+      "unsuitable": null,
+      "docType": "FAQ",
+      "discountPrice": null,
+      "faqItems": null,
+      "price": null,
+      "steps": [],
+      "aliases": []
+    },
+    {
+      "id": "cmo3rq1rx001dno28iwaqevs0",
+      "tenantId": "demo-tenant",
+      "title": "付款方式 FAQ",
+      "content": "付款方式說明（來源：美容院 KB 05 通用 FAQ）。",
+      "category": "FAQ",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:09.396Z",
+      "updatedAt": "2026-04-18T03:19:09.396Z",
+      "duration": null,
+      "effect": null,
+      "precaution": null,
+      "suitable": null,
+      "unsuitable": null,
+      "docType": "FAQ",
+      "discountPrice": null,
+      "faqItems": [
+        {
+          "answer": "可以，接受 Visa、Mastercard、八達通、PayMe、WeChat Pay。",
+          "question": "可以用信用卡付款嗎？"
+        }
+      ],
+      "price": null,
+      "steps": [],
+      "aliases": [
+        "付款",
+        "信用卡",
+        "Visa",
+        "Mastercard",
+        "八達通",
+        "PayMe"
+      ]
+    },
+    {
+      "id": "faq-location",
+      "tenantId": "demo-tenant",
+      "title": "地址及交通",
+      "content": "地址：香港銅鑼灣告士打道 123 號 大廈 A 座 8 樓\n\n交通：\n- 港鐵銅鑼灣站 C 出口，步行 5 分鐘\n- 巴士站：告士打道\n- 泊車：大廈地庫停車場（首 2 小時免費）",
+      "category": null,
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-20T11:22:52.518Z",
+      "updatedAt": "2026-04-22T22:10:06.058Z",
+      "duration": null,
+      "effect": null,
+      "precaution": null,
+      "suitable": null,
+      "unsuitable": null,
+      "docType": "FAQ",
+      "discountPrice": null,
+      "faqItems": null,
+      "price": null,
+      "steps": [],
+      "aliases": []
+    },
+    {
+      "id": "cmo3rq29j001fno288955vc1c",
+      "tenantId": "demo-tenant",
+      "title": "安全與副作用 FAQ",
+      "content": "療程安全及副作用相關說明（來源：美容院 KB 05 通用 FAQ）。",
+      "category": "FAQ",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:10.327Z",
+      "updatedAt": "2026-04-18T03:19:10.327Z",
+      "duration": null,
+      "effect": null,
+      "precaution": null,
+      "suitable": null,
+      "unsuitable": null,
+      "docType": "FAQ",
+      "discountPrice": null,
+      "faqItems": [
+        {
+          "answer": "所有療程均由持牌美容師操作，使用認證儀器。如有任何健康問題，請預約前告知。",
+          "question": "療程安全嗎？"
+        },
+        {
+          "answer": "大部分療程副作用輕微（短暫泛紅），會在文件內詳細說明。如有疑慮可以先諮詢。",
+          "question": "有無副作用？"
+        }
+      ],
+      "price": null,
+      "steps": [],
+      "aliases": [
+        "安全",
+        "副作用",
+        "持牌美容師"
+      ]
+    },
+    {
+      "id": "cmo3rq2qt001hno280bfpy37l",
+      "tenantId": "demo-tenant",
+      "title": "懷孕與禁忌 FAQ",
+      "content": "懷孕及禁忌相關說明（來源：美容院 KB 05 通用 FAQ）。",
+      "category": "FAQ",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:10.949Z",
+      "updatedAt": "2026-04-18T03:19:10.949Z",
+      "duration": null,
+      "effect": null,
+      "precaution": null,
+      "suitable": null,
+      "unsuitable": null,
+      "docType": "FAQ",
+      "discountPrice": null,
+      "faqItems": [
+        {
+          "answer": "部分療程可以，部分需要避免。請預約時告知懷孕狀態，我哋會推薦適合的療程。",
+          "question": "懷孕可以做美容嗎？"
+        }
+      ],
+      "price": null,
+      "steps": [],
+      "aliases": [
+        "懷孕",
+        "禁忌",
+        "孕婦"
+      ]
+    },
+    {
+      "id": "cmo3rq37p001jno28k6is3hff",
+      "tenantId": "demo-tenant",
+      "title": "會員優惠 FAQ",
+      "content": "會員優惠說明（來源：美容院 KB 05 通用 FAQ）。",
+      "category": "FAQ",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:11.556Z",
+      "updatedAt": "2026-04-18T03:19:11.556Z",
+      "duration": null,
+      "effect": null,
+      "precaution": null,
+      "suitable": null,
+      "unsuitable": null,
+      "docType": "FAQ",
+      "discountPrice": null,
+      "faqItems": [
+        {
+          "answer": "有，詳情可以向同事查詢或留下聯絡方式，我哋會發送會員計劃資料。",
+          "question": "有無會員優惠？"
+        }
+      ],
+      "price": null,
+      "steps": [],
+      "aliases": [
+        "會員",
+        "優惠",
+        "會員計劃"
+      ]
+    },
+    {
+      "id": "faq-hours",
+      "tenantId": "demo-tenant",
+      "title": "營業時間",
+      "content": "我們的營業時間：\n\n星期一至五：10:00 - 21:00\n星期六：10:00 - 19:00\n星期日及公眾假期：休息\n\n預約熱線：+852 1234 5678\nWhatsApp：+852 1234 5678",
+      "category": null,
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-20T11:22:52.518Z",
+      "updatedAt": "2026-04-22T22:10:05.727Z",
+      "duration": null,
+      "effect": null,
+      "precaution": null,
+      "suitable": null,
+      "unsuitable": null,
+      "docType": "FAQ",
+      "discountPrice": null,
+      "faqItems": null,
+      "price": null,
+      "steps": [],
+      "aliases": []
+    },
+    {
+      "id": "cmo3rq12c001bno28yuvoknpo",
+      "tenantId": "demo-tenant",
+      "title": "訂金與試做價 FAQ",
+      "content": "訂金政策及試做價與正價分別（來源：美容院 KB 05 通用 FAQ）。",
+      "category": "FAQ",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:08.773Z",
+      "updatedAt": "2026-04-18T03:19:08.773Z",
+      "duration": null,
+      "effect": null,
+      "precaution": null,
+      "suitable": null,
+      "unsuitable": null,
+      "docType": "FAQ",
+      "discountPrice": null,
+      "faqItems": [
+        {
+          "answer": "首次預約無需訂金。如有特別安排（套餐、激光療程）可能需要少量訂金。",
+          "question": "需要預付訂金嗎？"
+        },
+        {
+          "answer": "療程內容完全相同，試做價係新客戶優惠，每個療程限用一次。",
+          "question": "試做價同正價有咩分別？"
+        }
+      ],
+      "price": null,
+      "steps": [],
+      "aliases": [
+        "訂金",
+        "試做價",
+        "正價",
+        "新客"
+      ]
+    },
+    {
+      "id": "faq-refund",
+      "tenantId": "demo-tenant",
+      "title": "退款政策",
+      "content": "退款政策：\n\n- 未使用的預付款項可全額退款\n- 已使用的套票不設退款\n- 療程開始後不設退款\n- 特價優惠不設退款\n\n如有任何問題，請與我們聯絡。我們會盡力為你解決。",
+      "category": null,
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-20T11:22:52.518Z",
+      "updatedAt": "2026-04-22T22:10:06.796Z",
+      "duration": null,
+      "effect": null,
+      "precaution": null,
+      "suitable": null,
+      "unsuitable": null,
+      "docType": "FAQ",
+      "discountPrice": null,
+      "faqItems": null,
+      "price": null,
+      "steps": [],
+      "aliases": []
+    },
+    {
+      "id": "faq-booking",
+      "tenantId": "demo-tenant",
+      "title": "預約流程",
+      "content": "預約方式：\n\n1. WhatsApp / 電話預約\n2. 親臨門市預約\n3. 網上預約（會員專享）\n\n預約須知：\n- 首次預約請提前 24 小時\n- 如需改期，請提前 4 小時通知\n- 遲到超過 15 分鐘，療程時間將相應縮短\n- 未能出席且無事先通知，需繳付 HK$200 行政費",
+      "category": null,
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-20T11:22:52.518Z",
+      "updatedAt": "2026-04-22T22:10:06.426Z",
+      "duration": null,
+      "effect": null,
+      "precaution": null,
+      "suitable": null,
+      "unsuitable": null,
+      "docType": "FAQ",
+      "discountPrice": null,
+      "faqItems": null,
+      "price": null,
+      "steps": [],
+      "aliases": []
+    },
+    {
+      "id": "cmo3rq0li0019no28kcnjbxk1",
+      "tenantId": "demo-tenant",
+      "title": "預約與改期取消 FAQ",
+      "content": "預約渠道、改期及取消預約相關說明（來源：美容院 KB 05 通用 FAQ）。",
+      "category": "FAQ",
+      "tags": [],
+      "isActive": true,
+      "createdAt": "2026-04-18T03:19:08.166Z",
+      "updatedAt": "2026-04-18T03:19:08.166Z",
+      "duration": null,
+      "effect": null,
+      "precaution": null,
+      "suitable": null,
+      "unsuitable": null,
+      "docType": "FAQ",
+      "discountPrice": null,
+      "faqItems": [
+        {
+          "answer": "可以透過 WhatsApp、網頁或致電預約，我哋 24 小時 AI 助手可以幫你記錄預約意向，同事確認後會回覆你。",
+          "question": "如何預約？"
+        },
+        {
+          "answer": "請於預約時間 24 小時前通知，以便安排其他客人。",
+          "question": "如何取消或更改預約？"
+        }
+      ],
+      "price": null,
+      "steps": [],
+      "aliases": [
+        "預約",
+        "改期",
+        "取消預約",
+        "更改預約"
+      ]
+    }
+  ]
+}
