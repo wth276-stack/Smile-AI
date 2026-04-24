@@ -24,13 +24,30 @@ interface BookingsResponse {
 export default function BookingsPage() {
   const [data, setData] = useState<BookingsResponse | null>(null);
   const [error, setError] = useState('');
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchData = () => {
     api
       .get<BookingsResponse>('/bookings')
       .then(setData)
       .catch((e) => setError(e.message));
+  };
+
+  useEffect(() => {
+    fetchData();
   }, []);
+
+  const updateStatus = async (id: string, status: string) => {
+    setUpdatingId(id);
+    try {
+      await api.patch(`/bookings/${id}`, { status });
+      fetchData();
+    } catch (e: unknown) {
+      alert(`更新失敗：${e instanceof Error ? e.message : '未知錯誤'}`);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   if (error) {
     return (
