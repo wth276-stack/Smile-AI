@@ -343,11 +343,41 @@ export function buildServiceTaxonomy(catalog: ServiceEntry[]): ServiceSwitchTaxo
   };
 }
 
-function isDraftSameAsService(draft: BookingDraft, s: ServiceEntry): boolean {
+export function isDraftSameAsService(draft: BookingDraft, s: ServiceEntry): boolean {
   const d = (draft.serviceDisplayName ?? draft.serviceName ?? '').trim();
   if (!d) return false;
   if (d === s.displayName || d === s.code) return true;
   return normalize(d) === normalize(s.displayName) || normalize(d) === normalize(s.code);
+}
+
+/**
+ * When the user names a short or exact token (e.g. "ipl"), find at most one catalog
+ * row whose display name, code, or any alias normalizes identically to the token.
+ * Used to prefer deterministic replace over ambiguous clear in modify / sticky-draft flows.
+ */
+export function findUniqueExactAliasMatch(extracted: string, catalog: ServiceEntry[]): ServiceEntry | null {
+  const t = normalize(extracted);
+  if (!t || t.length < 2) return null;
+
+  const hits: ServiceEntry[] = [];
+  for (const s of catalog) {
+    let matched = false;
+    if (normalize(s.displayName) === t || normalize(s.code) === t) {
+      matched = true;
+    } else {
+      for (const a of s.aliases) {
+        if (normalize(a) === t) {
+          matched = true;
+          break;
+        }
+      }
+    }
+    if (matched) hits.push(s);
+  }
+
+  const codes = [...new Set(hits.map((h) => h.code))];
+  if (codes.length !== 1) return null;
+  return hits.find((h) => h.code === codes[0]) ?? null;
 }
 
 export type ServiceSwitchResult =

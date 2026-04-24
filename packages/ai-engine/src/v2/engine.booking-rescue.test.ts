@@ -361,12 +361,13 @@ describe('WhatsApp booking flow regression', () => {
       expect(result).toBeNull();
     });
 
-    it('LLM already extracted different service → return null (let merge handle it)', () => {
+    it('LLM already extracted different service → return null (draft already merged)', () => {
       const newSlots: Partial<BookingDraft> = {
         serviceName: '深層清潔 Facial',
         serviceDisplayName: '深層清潔 Facial',
       };
-      const result = detectServiceOverride('我想做深層清潔 Facial', hifuDraft, newSlots, switchKB);
+      const merged = mergeBookingDraft(hifuDraft, newSlots);
+      const result = detectServiceOverride('我想做深層清潔 Facial', merged, newSlots, switchKB);
       expect(result).toBeNull();
     });
 
@@ -430,6 +431,84 @@ describe('WhatsApp booking flow regression', () => {
     it('same service follow-up "Personal Training 幾多錢" → null', () => {
       const result = detectServiceOverride('Personal Training 幾多錢', ptDraft, {}, fitnessKB);
       expect(result).toBeNull();
+    });
+  });
+
+  describe('Sticky modify draft: explicit new service (IPL) replaces old booking service', () => {
+    const iplStickyKB: KnowledgeChunk[] = [
+      {
+        documentId: 'eye',
+        title: '眼部特別護理 Eye Treatment',
+        content: '眼部特別護理 Eye Treatment\n正價：HKD 350',
+        score: 1,
+      },
+      {
+        documentId: 'ipl',
+        title: 'IPL 彩光嫩膚',
+        content: 'IPL 彩光嫩膚\n正價：HKD 1200',
+        score: 1,
+        aliases: ['彩光（IPL）嫩膚'],
+      },
+    ];
+
+    const eyeModifyDraft: BookingDraft = {
+      bookingId: 'bk-eye',
+      mode: 'modify',
+      serviceName: '眼部特別護理 Eye Treatment',
+      serviceDisplayName: '眼部特別護理 Eye Treatment',
+      date: '2026-04-20',
+      time: '14:00',
+      customerName: 'Yoyo',
+      phone: '91234567',
+    };
+
+    it('IPL → replace with catalog IPL service', () => {
+      const r = detectServiceOverride('IPL', eyeModifyDraft, {}, iplStickyKB);
+      expect(r?.action).toBe('replace');
+      expect(r?.serviceDisplayName).toBe('IPL 彩光嫩膚');
+    });
+
+    it('Ipl → replace (case-insensitive via normalize)', () => {
+      const r = detectServiceOverride('Ipl', eyeModifyDraft, {}, iplStickyKB);
+      expect(r?.action).toBe('replace');
+      expect(r?.serviceDisplayName).toBe('IPL 彩光嫩膚');
+    });
+
+    it('我要預約ipl → replace', () => {
+      const r = detectServiceOverride('我要預約ipl', eyeModifyDraft, {}, iplStickyKB);
+      expect(r?.action).toBe('replace');
+      expect(r?.serviceDisplayName).toBe('IPL 彩光嫩膚');
+    });
+
+    it('我想預約ipl，4月28號6點 → replace service (comma-separated date/time)', () => {
+      const r = detectServiceOverride('我想預約ipl，4月28號6點', eyeModifyDraft, {}, iplStickyKB);
+      expect(r?.action).toBe('replace');
+      expect(r?.serviceDisplayName).toBe('IPL 彩光嫩膚');
+    });
+
+    it('same-service reschedule wording → null (no service switch)', () => {
+      const r = detectServiceOverride('改期到4月28號6點可以嗎？', eyeModifyDraft, {}, iplStickyKB);
+      expect(r).toBeNull();
+    });
+
+    it('ambiguous FACIAL with multi-facial KB → clear (unchanged safety)', () => {
+      const multiFacialKB: KnowledgeChunk[] = [
+        ...iplStickyKB,
+        {
+          documentId: 'deep-facial',
+          title: '深層清潔 Facial',
+          content: '深層清潔 Facial\nHKD 480',
+          score: 1,
+        },
+        {
+          documentId: 'hydrate-facial',
+          title: '補濕亮肌 Facial',
+          content: '補濕亮肌 Facial\nHKD 580',
+          score: 1,
+        },
+      ];
+      const r = detectServiceOverride('我想預約FACIAL', eyeModifyDraft, {}, multiFacialKB);
+      expect(r?.action).toBe('clear');
     });
   });
 });

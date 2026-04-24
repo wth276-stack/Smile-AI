@@ -29,7 +29,13 @@ import {
   extractSlots,
   getMissingBookingSlots,
 } from '../booking-state';
-import { buildServiceCatalog, extractServiceText, matchService } from '../service-matcher';
+import {
+  buildServiceCatalog,
+  extractServiceText,
+  findUniqueExactAliasMatch,
+  isDraftSameAsService,
+  matchService,
+} from '../service-matcher';
 import { buildSlotPolicyFromTenantSettings, validateBookingSlot } from '../booking-slot-availability';
 import { classifyQuestion, buildOpeningHoursReply } from '../question-router';
 import { extractBareHourCandidates, resolveAmbiguousTime, firstValidWindowStart } from '../time-ambiguity';
@@ -106,25 +112,52 @@ function shouldSkipCase3WhenAffirmingWithoutPending(
 function detectServiceOverride(
   message: string,
   draft: BookingDraft,
-  newSlots: Partial<BookingDraft>,
+  _newSlots: Partial<BookingDraft>,
   knowledge: KnowledgeChunk[],
 ): { action: 'clear' | 'replace'; serviceName?: string; serviceDisplayName?: string } | null {
-  if (!draft.serviceName) return null;
-  if (newSlots.serviceName && newSlots.serviceName !== draft.serviceName) return null;
+  const hasDraftService = !!(draft.serviceName?.trim() || draft.serviceDisplayName?.trim());
+  if (!hasDraftService) return null;
 
   const extracted = extractServiceText(message);
   if (!extracted || extracted.length < 2) return null;
 
+  const head = extracted.split(/[，,]/)[0]?.trim();
+  const fragments =
+    head && head.length >= 2 && head !== extracted ? [head, extracted] : [extracted];
+
   const catalog = buildServiceCatalog(knowledge);
-  const result = matchService(extracted, catalog);
 
-  if (result.type === 'none') return null;
-  if (result.type === 'ambiguous') return { action: 'clear' };
+  let matchedService: ServiceEntry | null = null;
+  let sawAmbiguous = false;
 
-  const matchedService = result.matches[0].service;
-  if (matchedService.code === draft.serviceName || matchedService.displayName === draft.serviceDisplayName) return null;
+  for (const fragment of fragments) {
+    const uniqueExact = findUniqueExactAliasMatch(fragment, catalog);
+    if (uniqueExact) {
+      matchedService = uniqueExact;
+      break;
+    }
 
-  return { action: 'replace', serviceName: matchedService.code, serviceDisplayName: matchedService.displayName };
+    const result = matchService(fragment, catalog);
+    if (result.type === 'exact' || result.type === 'close') {
+      matchedService = result.matches[0]!.service;
+      break;
+    }
+    if (result.type === 'ambiguous') {
+      sawAmbiguous = true;
+    }
+  }
+
+  if (!matchedService) {
+    return sawAmbiguous ? { action: 'clear' } : null;
+  }
+
+  if (isDraftSameAsService(draft, matchedService)) return null;
+
+  return {
+    action: 'replace',
+    serviceName: matchedService.code,
+    serviceDisplayName: matchedService.displayName,
+  };
 }
 
 const MAX_HISTORY = 10;

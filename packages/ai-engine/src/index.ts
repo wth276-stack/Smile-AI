@@ -30,7 +30,13 @@ export {
   verifyManualChatRoutingRegression,
   verifyPhase1EAcceptancePack,
 } from './orchestrator';
-export { buildServiceCatalog, matchService, extractServiceText } from './service-matcher';
+export {
+  buildServiceCatalog,
+  matchService,
+  extractServiceText,
+  findUniqueExactAliasMatch,
+  isDraftSameAsService,
+} from './service-matcher';
 export {
   emptyDraft,
   extractSlots,
