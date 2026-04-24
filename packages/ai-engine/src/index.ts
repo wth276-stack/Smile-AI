@@ -35,6 +35,7 @@ export {
   emptyDraft,
   extractSlots,
   extractSlotsWithReferenceDate,
+  extractCustomerName,
   mergeSlots,
   getMissingSlots,
   isBookingComplete,

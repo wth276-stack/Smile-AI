@@ -377,7 +377,116 @@ function takeLeadingPersonalName(slice: string): string | null {
   return zh ? zh[1] : null;
 }
 
-function extractCustomerName(msg: string): string | null {
+/** English filler / ack tokens — whole-message only; conservative. */
+const STANDALONE_ENGLISH_BLOCK = new Set(
+  [
+    'ok',
+    'okay',
+    'yes',
+    'no',
+    'y',
+    'n',
+    'ya',
+    'yep',
+    'yup',
+    'nah',
+    'hi',
+    'hey',
+    'hello',
+    'bye',
+    'thx',
+    'thanks',
+    'thank',
+    'pls',
+    'please',
+    'oh',
+    'em',
+    'hmm',
+    'um',
+    'er',
+    'ha',
+  ].map((s) => s.toLowerCase()),
+);
+
+/** Short whole-message service / FAQ English tokens. */
+const STANDALONE_LATIN_SERVICE_BLOCK = new Set(
+  'hifu,ipl,faq,botox,bot,laser,lasik'.split(/[,，\s]+/).map((s) => s.toLowerCase().trim()).filter(Boolean),
+);
+
+/** 2–4 Han exact phrases that are not personal names. */
+const STANDALONE_CJK_EXACT_BLOCK = new Set(
+  '取消,改期,預約,多謝,明白,了解,唔好,好呀,好的,唔該,冇,有冇,營業,聯絡,查詢,退款,付款,幾多,多謝晒,上星期,下星期,星期六,星期日,星期一,星期二,星期三,星期四,星期五,禮拜日,禮拜一,禮拜二,禮拜三,禮拜四,禮拜五,禮拜六,今日,聽日,尋日,明天,後天'
+    .split(/[,，\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean),
+);
+
+/** Substrings that indicate time/booking/FAQ — not a lone name (no bare `点` to avoid 小點-style names if needed later). */
+const STANDALONE_SUBSTRING_REJECT =
+  /星期|週[一二三四五六日天]|禮拜|[上上下]禮拜|[上上下]星期|預[約定]|療程|按摩|hifu|book|reschedule|cancel|whatsapp|營業|聯[絡系]|查詢|價(錢|格)|幾[点點]|[兩兩三三四五六七八九十]點|[点點]半|[时時]|(聽|尋)日|[今明]天|上?周|\$/i;
+
+const STANDALONE_MAX_LEN = 32;
+
+/**
+ * When the user sends only a name (e.g. Yoyo, Karen) with no 我叫/逗号 cue,
+ * accept the whole message as customerName. Conservative: block dates, services, acks.
+ */
+function tryExtractStandalonePersonalName(raw: string): string | null {
+  let s = raw.trim();
+  if (!s) return null;
+  s = s.replace(/[。．.!！?？]+$/g, '').trim();
+  if (!s) return null;
+  if (s.length > STANDALONE_MAX_LEN) return null;
+  if (/\d|[０-９]/.test(s)) return null;
+  if (s.includes('，') || s.includes(',')) return null;
+  if (s.includes('：') || s.includes(':')) return null;
+  if (s.includes('？') || s.includes('?')) return null;
+  if (STANDALONE_SUBSTRING_REJECT.test(s)) return null;
+  if (s.length < 2) return null;
+  if (STANDALONE_CJK_EXACT_BLOCK.has(s)) return null;
+
+  // Latin: 1–3 words, letters + apostrophe / hyphen / full stop
+  if (/^[A-Za-z]/.test(s)) {
+    if (!/^[A-Za-z'’\s\-.]+$/i.test(s)) return null;
+    const words = s.split(/\s+/).filter(Boolean);
+    if (words.length < 1 || words.length > 3) return null;
+    for (const w of words) {
+      const letterCount = (w.match(/[A-Za-z]/g) ?? []).length;
+      if (letterCount < 2) return null;
+    }
+    const lowerS = s.toLowerCase();
+    if (STANDALONE_ENGLISH_BLOCK.has(lowerS)) return null;
+    for (const w of words) {
+      if (STANDALONE_ENGLISH_BLOCK.has(w.toLowerCase())) return null;
+    }
+    if (STANDALONE_LATIN_SERVICE_BLOCK.has(lowerS)) return null;
+    if (words.length === 1) {
+      const w = words[0] ?? '';
+      if (w.length >= 2 && w.length <= 4 && w === w.toUpperCase() && /^[A-Z]{2,4}$/.test(w)) {
+        const up = w.toLowerCase();
+        if (STANDALONE_LATIN_SERVICE_BLOCK.has(up) || /^(hifu|ipl|faq|bot)$/i.test(w)) {
+          return null;
+        }
+      }
+    }
+    return s;
+  }
+
+  // CJK: 阿X / 阿XX
+  if (/^阿[\u4e00-\u9fff]{1,2}$/.test(s)) {
+    if (STANDALONE_SUBSTRING_REJECT.test(s)) return null;
+    return s;
+  }
+  if (/^[\u4e00-\u9fff]{2,4}$/.test(s) && !/\s/.test(s)) {
+    if (STANDALONE_SUBSTRING_REJECT.test(s)) return null;
+    if (STANDALONE_CJK_EXACT_BLOCK.has(s)) return null;
+    return s;
+  }
+
+  return null;
+}
+
+export function extractCustomerName(msg: string): string | null {
   /** "Gigi，星期日十點" — leading Latin / common display name before comma */
   const leadComma = msg.match(
     /^\s*([a-zA-Z][a-zA-Z'’.\-]*(?:\s+[a-zA-Z][a-zA-Z'’.\-]*)*)\s*[，,]\s*/,
@@ -407,7 +516,7 @@ function extractCustomerName(msg: string): string | null {
     if (name) return name;
   }
 
-  return null;
+  return tryExtractStandalonePersonalName(msg);
 }
 
 // ── Phone extraction ──────────────────────────────────────────────────────────
