@@ -177,4 +177,19 @@ describe('validateBookingSlot', () => {
     expect(r.allowed).toBe(true);
     expect(spy).toHaveBeenCalled();
   });
+
+  it('suggested alternatives use valid window-start hours, not the failed request hour', () => {
+    // Request 07:00 on Monday — outside 10:00–20:00
+    const r = validateBookingSlot({
+      ...base(),
+      date: '2026-01-12',
+      time: '07:00',
+    });
+    expect(r.allowed).toBe(false);
+    expect(r.code).toBe('outside_hours');
+    // Alternatives must NOT contain "07:00"; should contain "10:00" (window start)
+    const alts = r.suggestedAlternatives ?? '';
+    expect(alts).not.toContain('07:00');
+    expect(alts).toContain('10:00');
+  });
 });

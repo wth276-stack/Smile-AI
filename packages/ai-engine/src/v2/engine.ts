@@ -31,6 +31,8 @@ import {
 } from '../booking-state';
 import { buildServiceCatalog, extractServiceText, matchService } from '../service-matcher';
 import { buildSlotPolicyFromTenantSettings, validateBookingSlot } from '../booking-slot-availability';
+import { classifyQuestion, buildOpeningHoursReply } from '../question-router';
+import { extractBareHourCandidates, resolveAmbiguousTime, firstValidWindowStart } from '../time-ambiguity';
 
 const FALLBACK_REPLY = '抱歉，系統暫時遇到問題，請稍後再試 🙏';
 
@@ -615,6 +617,33 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
 
   try {
     const ctx = buildPromptContext(input);
+
+    // ── Opening-hours deterministic short-circuit ──
+    // If user is asking about business hours / opening status, answer directly
+    // instead of sending to LLM and potentially trapping in booking flow.
+    {
+      const qr = classifyQuestion(input.currentMessage);
+      if (qr.questionType === 'faq_hours' && qr.isGlobalFaq) {
+        const hoursReply = buildOpeningHoursReply(
+          input.currentMessage,
+          input.tenant.settings ?? {},
+        );
+        if (hoursReply) {
+          return {
+            replyText: hoursReply,
+            signals: {
+              intents: ['FAQ'],
+              extractedFields: {},
+              action: 'REPLY_ONLY',
+            },
+            sideEffects: [],
+            shouldHandoff: false,
+            analytics: { model: 'deterministic', inputTokens: 0, outputTokens: 0, durationMs: Date.now() - start },
+          };
+        }
+      }
+    }
+
     const messages = buildMessages(ctx);
     for (const msg of messages) {
   if (msg.role === 'assistant' && typeof msg.content === 'string') {
@@ -952,6 +981,37 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
       finalAction = boundary.action;
       if (boundary.usedTemplate) {
         console.warn('[v2/engine] Confirmation boundary (Case 3): deterministic summary + CONFIRM_BOOKING');
+      }
+    }
+
+    // ── Ambiguous bare-hour resolution ──
+    // If the user gave a bare hour like `7點` (no AM/PM marker) and we have a date,
+    // resolve via business-hours instead of blindly using the collapsed `07:00`.
+    {
+      const draftDate = finalMergedDraft.date?.trim();
+      const draftTime = finalMergedDraft.time?.trim();
+      if (draftDate && draftTime) {
+        const candidates = extractBareHourCandidates(input.currentMessage);
+        if (candidates) {
+          const policy = buildSlotPolicyFromTenantSettings(input.tenant.settings ?? {});
+          const resolution = resolveAmbiguousTime(draftDate, candidates, policy.businessHours, policy.timeZone);
+          debugLog('[v2/engine] Ambiguous time resolution:', JSON.stringify(resolution));
+          if (resolution.outcome === 'resolved') {
+            finalMergedDraft.time = resolution.time;
+            if (finalNewSlots.time) finalNewSlots.time = resolution.time;
+          } else if (resolution.outcome === 'clarify') {
+            finalAction = 'COLLECT_BOOKING';
+            finalReply = `你話 ${candidates.bareHour} 點，係指上午 ${candidates.amTime} 定下午/晚上 ${candidates.pmTime}？`;
+          } else if (resolution.outcome === 'none_valid') {
+            finalAction = 'COLLECT_BOOKING';
+            const altStart = firstValidWindowStart(policy.businessHours, draftDate, policy.timeZone);
+            if (altStart) {
+              finalReply = `${candidates.bareHour} 點（${candidates.amTime} 同 ${candidates.pmTime}）都唔喺營業時間內。當日營業由 ${altStart} 開始，你想約呢個時間嗎？`;
+            } else {
+              finalReply = `${candidates.bareHour} 點唔喺營業時間內，該日可能為休息日。請揀另一日或另一個時間。`;
+            }
+          }
+        }
       }
     }
 

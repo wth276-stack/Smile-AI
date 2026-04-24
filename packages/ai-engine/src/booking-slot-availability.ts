@@ -231,13 +231,32 @@ function normalizeTimeHm(t: string): string {
 }
 
 /**
- * Suggest a few next candidate slots: next 2 business-day opens at common hour, generic wording.
+ * Return the first valid window-start HH:mm for a given open day, or use `fallbackHour`
+ * only if it falls inside a window. Never returns times outside business hours.
+ */
+function pickValidHourForDay(day: DayWindows, fallbackHour: number): string {
+  if (day === 'closed' || day === null || !Array.isArray(day) || day.length === 0) return '10:00';
+  const fallbackMin = fallbackHour * 60;
+  for (const w of day) {
+    if (fallbackMin >= w.startMin && fallbackMin < w.endMin) {
+      return `${String(fallbackHour).padStart(2, '0')}:00`;
+    }
+  }
+  const earliest = day.reduce((a, b) => (a.startMin < b.startMin ? a : b));
+  const h = Math.floor(earliest.startMin / 60);
+  const m = earliest.startMin % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/**
+ * Suggest next valid slots on upcoming business days. The suggested time is always
+ * a valid hour (first window start), never blindly reusing the failed request hour.
  */
 function buildAlternatives(
   weekly: DayWindows[],
   startYmd: string,
   timeZone: string,
-  seedHour: number,
+  _seedHour: number,
 ): string {
   const alts: string[] = [];
   let y = startYmd;
@@ -246,13 +265,14 @@ function buildAlternatives(
     const wIdx = getJsWeekday0SunInTimeZone(y, timeZone);
     const day = weekly[wIdx];
     if (day && day !== 'closed' && day !== null && day.length > 0) {
+      const validTime = pickValidHourForDay(day, _seedHour);
       const dLabel = new Intl.DateTimeFormat('en-CA', {
         timeZone,
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
       }).format(findRepresentativeInstantForYmd(y, timeZone));
-      alts.push(`${dLabel} ${String(seedHour).padStart(2, '0')}:00（${timeZone} 營業日參考）`);
+      alts.push(`${dLabel} ${validTime}（營業日參考）`);
     }
   }
   if (alts.length === 0) {

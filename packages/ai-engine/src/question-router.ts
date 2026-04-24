@@ -100,7 +100,7 @@ const PATTERNS: [QuestionType, RegExp, number][] = [
   // ── faq_hours ─────────────────────────────────────────────────────────────
   [
     'faq_hours',
-    /幾點開門|幾點關門|營業時間|幾時開|幾時閂|opening.?hour|business.?hour/i,
+    /幾點開門|幾點關門|營業時間|幾時開|幾時閂|opening.?hour|business.?hour|唔開門|有冇開|收幾點|幾點收|邊日開|星期[日一二三四五六天].{0,4}(?:開|閂|休|有冇開)/i,
     0.9,
   ],
 
@@ -257,6 +257,50 @@ const FAQ_ANSWERS: Partial<Record<QuestionType, string>> = {
  */
 export function getFaqAnswer(type: QuestionType): string | null {
   return FAQ_ANSWERS[type] ?? null;
+}
+
+// ── Opening-hours deterministic answer ──────────────────────────────────────
+
+const DAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'];
+
+/**
+ * Build a deterministic reply for opening-hours questions using tenant settings.
+ * Returns null when we have no business-hours data at all.
+ */
+export function buildOpeningHoursReply(
+  message: string,
+  settings: Record<string, unknown>,
+): string | null {
+  const bhText = typeof settings.businessHoursText === 'string' ? settings.businessHoursText.trim() : null;
+  const bh = settings.businessHours;
+  const businessName = typeof settings.businessName === 'string' ? settings.businessName.trim() : '我哋';
+
+  if (!bhText && !bh) return null;
+
+  const weekdayMatch = message.match(/星期([日一二三四五六天])/);
+  if (weekdayMatch) {
+    const dayChar = weekdayMatch[1] === '天' ? '日' : weekdayMatch[1];
+    const dayIdx = DAY_NAMES.indexOf(dayChar);
+    if (dayIdx >= 0 && bh && typeof bh === 'object') {
+      const keys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+      const val = (bh as Record<string, unknown>)[keys[dayIdx]];
+      if (val === 'closed' || val === 'rest' || val === '休息' || val === 'none') {
+        return `星期${dayChar}${businessName}休息，唔開門㗎 😊 如需預約可以揀返營業日。\n\n${bhText ?? ''}`.trim();
+      }
+      if (typeof val === 'string' && val.trim()) {
+        return `星期${dayChar}${businessName}營業時間係 ${val.trim()} 😊`;
+      }
+    }
+    if (bhText) {
+      return `${businessName}嘅營業時間如下：\n${bhText}`;
+    }
+  }
+
+  if (bhText) {
+    return `${businessName}嘅營業時間如下：\n${bhText}`;
+  }
+
+  return null;
 }
 
 // ── Regression tests ──────────────────────────────────────────────────────────
