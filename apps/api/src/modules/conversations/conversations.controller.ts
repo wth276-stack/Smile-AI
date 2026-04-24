@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { TenantId } from '../../common/decorators/tenant-id.decorator';
@@ -21,5 +21,19 @@ export class ConversationsController {
       this.conversations.getLatestSignals(id),
     ]);
     return { ...conversation, signals };
+  }
+
+  @Post(':id/messages')
+  async sendMessage(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() body: { content: string },
+  ) {
+    return this.conversations.addHumanMessage(tenantId, id, body.content);
+  }
+
+  @Patch(':id/handoff')
+  async handoff(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.conversations.handoff(tenantId, id);
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { PaginationDto } from '../../common/dto/pagination.dto';
@@ -112,6 +112,27 @@ export class ConversationsService {
    * Get the latest AI signals for a conversation.
    * Returns customer emotion, trust, readiness, resistance, style, and strategy.
    */
+  async addHumanMessage(tenantId: string, conversationId: string, content: string) {
+    const trimmed = content.trim();
+    if (!trimmed) {
+      throw new BadRequestException('Message content is required');
+    }
+    await this.prisma.conversation.findFirstOrThrow({
+      where: { id: conversationId, tenantId },
+    });
+    return this.addMessage(conversationId, 'HUMAN', trimmed);
+  }
+
+  async handoff(tenantId: string, conversationId: string) {
+    await this.prisma.conversation.findFirstOrThrow({
+      where: { id: conversationId, tenantId, status: 'OPEN' },
+    });
+    return this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { status: 'HANDED_OFF' },
+    });
+  }
+
   async getLatestSignals(conversationId: string): Promise<ConversationSignals> {
     const lastRun = await this.prisma.aiRun.findFirst({
       where: { conversationId },

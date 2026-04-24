@@ -79,7 +79,7 @@ export default function BookingsPage() {
           <p className="mt-2 text-sm">客戶透過 AI 對話預約後會自動出現</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-[var(--border)]">
+        <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-[var(--border)] bg-[var(--muted)]">
               <tr>
@@ -88,6 +88,7 @@ export default function BookingsPage() {
                 <th className="px-4 py-3 font-medium">時間</th>
                 <th className="px-4 py-3 font-medium">狀態</th>
                 <th className="px-4 py-3 font-medium">建立日期</th>
+                <th className="px-4 py-3 font-medium">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -103,6 +104,30 @@ export default function BookingsPage() {
                   </td>
                   <td className="px-4 py-3 text-[var(--muted-foreground)]">
                     {formatDateTime(b.createdAt)}
+                  </td>
+                  <td className="px-4 py-3">
+                    {b.status === 'PENDING' && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => updateStatus(b.id, 'CONFIRMED')}
+                          disabled={updatingId === b.id}
+                          className="rounded-lg bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                        >
+                          確認
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm('確定取消此預約？')) {
+                              updateStatus(b.id, 'CANCELLED');
+                            }
+                          }}
+                          disabled={updatingId === b.id}
+                          className="rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

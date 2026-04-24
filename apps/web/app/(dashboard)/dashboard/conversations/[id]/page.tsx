@@ -38,14 +38,49 @@ export default function ConversationDetailPage() {
   const id = params.id as string;
   const [conv, setConv] = useState<ConversationDetail | null>(null);
   const [error, setError] = useState('');
+  const [messageText, setMessageText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [handingOff, setHandingOff] = useState(false);
 
-  useEffect(() => {
-    if (!id) return;
+  const fetchConv = () => {
     api
       .get<ConversationDetail>(`/conversations/${id}`)
       .then(setConv)
       .catch((e) => setError(e.message));
+  };
+
+  useEffect(() => {
+    if (!id) return;
+    fetchConv();
   }, [id]);
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!messageText.trim() || sending) return;
+    setSending(true);
+    try {
+      await api.post(`/conversations/${id}/messages`, { content: messageText.trim() });
+      setMessageText('');
+      fetchConv();
+    } catch {
+      alert('發送失敗');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleHandoff = async () => {
+    if (!window.confirm('確定接管此對話？接管後 AI 將不再自動回覆。')) return;
+    setHandingOff(true);
+    try {
+      await api.patch(`/conversations/${id}/handoff`);
+      fetchConv();
+    } catch {
+      alert('接管失敗');
+    } finally {
+      setHandingOff(false);
+    }
+  };
 
   if (error) {
     return (
@@ -84,6 +119,18 @@ export default function ConversationDetailPage() {
             <p className="text-sm text-[var(--muted-foreground)]">
               {conv.channel} · {conv.status} · {conv.messages.length} 則訊息
             </p>
+            {conv.status === 'OPEN' && (
+              <button
+                onClick={handleHandoff}
+                disabled={handingOff}
+                className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm text-white hover:bg-orange-700 disabled:opacity-50"
+              >
+                {handingOff ? '接管中...' : '接管對話'}
+              </button>
+            )}
+            {conv.status === 'HANDED_OFF' && (
+              <span className="rounded-lg bg-gray-200 px-3 py-1.5 text-sm text-gray-500">已接管</span>
+            )}
           </div>
         </div>
 
@@ -114,6 +161,32 @@ export default function ConversationDetailPage() {
             </div>
           ))}
         </div>
+
+        {/* Handoff banner */}
+        {conv.status === 'HANDED_OFF' && (
+          <div className="mt-2 rounded-lg bg-orange-50 px-3 py-2 text-sm text-orange-700">
+            此對話已由真人接管
+          </div>
+        )}
+
+        {/* Message input */}
+        <form onSubmit={handleSend} className="mt-2 flex gap-2">
+          <input
+            type="text"
+            value={messageText}
+            onChange={(e) => setMessageText(e.target.value)}
+            placeholder="輸入訊息..."
+            className="flex-1 rounded-lg border border-[var(--border)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            disabled={sending}
+          />
+          <button
+            type="submit"
+            disabled={sending || !messageText.trim()}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {sending ? '發送中...' : '發送'}
+          </button>
+        </form>
       </div>
 
       {/* Signals panel */}
