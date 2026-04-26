@@ -140,7 +140,10 @@ export class WhatsappWebhookService implements OnModuleDestroy {
       where: {
         channel: 'WHATSAPP',
         isActive: true,
-        credentials: { path: ['phone_number_id'], equals: phoneNumberId },
+        OR: [
+          { credentials: { path: ['phone_number_id'], equals: phoneNumberId } },
+          { credentials: { path: ['phoneNumberId'], equals: phoneNumberId } },
+        ],
       },
     });
 
