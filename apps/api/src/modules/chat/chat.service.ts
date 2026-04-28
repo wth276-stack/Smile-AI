@@ -123,6 +123,9 @@ export class ChatService {
     if (channel === 'WHATSAPP') {
       const testSessionEnabled = process.env.WHATSAPP_TEST_SESSION_ENABLED === 'true';
       const testSessionAllowlist = parseTestSessionAllowlist(process.env.WHATSAPP_TEST_SESSION_ALLOWLIST);
+      this.logger.log(
+        `[test-session-debug] channel=${channel} waId=${externalContactId} allowlist=${JSON.stringify(testSessionAllowlist)} enabled=${testSessionEnabled} startsWithTest=${message.startsWith('#test:')}`,
+      );
       const parsed = parseWhatsappTestSession(
         externalContactId,
         message,
