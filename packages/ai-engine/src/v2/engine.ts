@@ -930,6 +930,7 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     }
 
     finalAction = validated.action as string;
+    let finalIntent = validated.intent as AiIntent;
 
     if (finalAction === 'SUBMIT_BOOKING' && missingSlots.length > 0) {
       console.log('[v2/engine] SUBMIT_BOOKING but missing:', missingSlots);
@@ -951,6 +952,21 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     // Pass through MODIFY_BOOKING and CANCEL_BOOKING as-is
     if (finalAction === 'MODIFY_BOOKING' || finalAction === 'CANCEL_BOOKING') {
       // These don't need slot validation — bookingId is validated by validator.ts
+    }
+
+    // ── Deterministic booking-intent fallback ──
+    // When the LLM returns REPLY/REPLY_ONLY but the user message contains explicit
+    // booking intent words AND a service was matched, upgrade to COLLECT_BOOKING.
+    if (
+      (finalAction === 'REPLY' || finalAction === 'REPLY_ONLY') &&
+      finalMergedDraft.mode !== 'modify' &&
+      finalMergedDraft.mode !== 'cancel' &&
+      (finalMergedDraft.serviceName?.trim() || finalMergedDraft.serviceDisplayName?.trim()) &&
+      /預約|想約|book(ing)?\b|訂位|訂座/i.test(input.currentMessage)
+    ) {
+      finalAction = 'COLLECT_BOOKING';
+      finalIntent = 'BOOKING_REQUEST' as AiIntent;
+      debugLog('[v2/engine] Booking-intent fallback: upgraded', validated.action, '→ COLLECT_BOOKING');
     }
 
     // ── Robust guard: no confirmation-summary wording until all required slots exist ──
@@ -1107,7 +1123,7 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     const result: AiEngineResult & { _rawLlmJson?: string } = {
       replyText: finalReply,
       signals: {
-        intents: [validated.intent as AiIntent],
+        intents: [finalIntent],
         extractedFields: buildExtractedFields(finalNewSlots),
         action: finalLegacyAction,
         bookingDraft: finalMergedDraft,
@@ -1128,7 +1144,7 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
     (result as any)._rawLlmJson = rawText;
     (result as any)._v2Action = finalAction;
     traceBookingPath('return', {
-      intent: validated.intent,
+      intent: finalIntent,
       finalV2Action: finalAction,
       legacyAction: finalLegacyAction,
       slotAvailabilityBlocked,
