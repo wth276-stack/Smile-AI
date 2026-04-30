@@ -43,6 +43,14 @@ Expected:
 Multi-industry smoke passed (beauty, cleaning, yoga).
 ```
 
+Latest local smoke also passed on `http://localhost:3002`:
+
+```powershell
+$env:API_BASE="http://localhost:3002"
+pnpm run smoke:mvp
+pnpm run smoke:industries
+```
+
 Open:
 - Public demo chat.
 - Dashboard bookings page.

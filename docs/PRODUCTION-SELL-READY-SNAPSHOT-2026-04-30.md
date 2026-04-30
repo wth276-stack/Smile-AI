@@ -65,6 +65,28 @@ Result:
 Multi-industry smoke passed (beauty, cleaning, yoga).
 ```
 
+## Latest Local Smoke Result
+
+Local API tested:
+
+```text
+http://localhost:3002
+```
+
+Local smoke commands:
+
+```powershell
+$env:API_BASE="http://localhost:3002"
+pnpm run smoke:mvp
+pnpm run smoke:industries
+```
+
+Latest local smoke also passed:
+- `smoke:mvp` passed S1-S8.
+- `smoke:industries` passed Beauty, Cleaning, and Yoga.
+- Local booking window matched the production smoke window: `2026-05-16 11:00` -> `2026-05-18 15:00`.
+- KB reset protection passed: Beauty KB preserved `36 -> 36`.
+
 Booking window used by smoke:
 
 ```text
