@@ -9,6 +9,7 @@ coverage/
 .DS_Store
 Thumbs.db
 *.tsbuildinfo
+artifacts/kb-backups/
 
 Smile-AI/
 Smile-AI-1/ 

@@ -42,13 +42,15 @@ export class DemoService {
   async resetDemo(
     industryId: string,
     conversationId?: string,
+    options: { resetKnowledgeBase?: boolean } = {},
   ): Promise<{
     success: true;
     industry: string;
     servicesCount: number;
     kbCount: number;
     tenantId: string;
-    destructive: {
+    knowledgeBaseReset: boolean;
+    reset: {
       scope: string;
       whatChanged: string[];
       dataLoss: string;
@@ -65,25 +67,54 @@ export class DemoService {
 
     await this.resetConversationIfNeeded(conversationId);
 
-    const { servicesCount, kbCount, displayName } = await applyIndustrySeedToTenant(
-      this.prisma,
-      tenantId,
-      industryId.trim(),
-    );
+    if (options.resetKnowledgeBase === true) {
+      const { servicesCount, kbCount, displayName } = await applyIndustrySeedToTenant(
+        this.prisma,
+        tenantId,
+        industryId.trim(),
+      );
+
+      return {
+        success: true,
+        industry: displayName,
+        servicesCount,
+        kbCount,
+        tenantId,
+        knowledgeBaseReset: true,
+        reset: {
+          scope: 'This demo tenant was reset from canonical industry seed data.',
+          whatChanged: [
+            'All KnowledgeDocument rows for this tenant were replaced (FAQ + service articles).',
+            'Tenant name and settings (persona, business hours, contact fields, businessType, structured hours) were overwritten from seed.',
+          ],
+          dataLoss: 'Any manual demo edits in the dashboard (KB, tenant settings) for this tenant are lost.',
+        },
+      };
+    }
+
+    const [servicesCount, kbCount] = await Promise.all([
+      this.prisma.knowledgeDocument.count({
+        where: { tenantId, isActive: true, docType: 'SERVICE' },
+      }),
+      this.prisma.knowledgeDocument.count({
+        where: { tenantId, isActive: true },
+      }),
+    ]);
 
     return {
       success: true,
-      industry: displayName,
+      industry: seed.displayName,
       servicesCount,
       kbCount,
       tenantId,
-      destructive: {
-        scope: 'This demo tenant was reset from canonical industry seed data.',
+      knowledgeBaseReset: false,
+      reset: {
+        scope: 'Conversation state reset only. KnowledgeDocument rows were preserved.',
         whatChanged: [
-          'All KnowledgeDocument rows for this tenant were replaced (FAQ + service articles).',
-          'Tenant name and settings (persona, business hours, contact fields, businessType, structured hours) were overwritten from seed.',
+          'If conversationId was supplied, customer/AI messages and AiRun rows for that demo conversation were cleared.',
+          'Booking draft metadata for that conversation was cleared.',
         ],
-        dataLoss: 'Any manual demo edits in the dashboard (KB, tenant settings) for this tenant are lost.',
+        dataLoss: 'No KB rows or tenant settings were changed. Pass resetKnowledgeBase=true only when an intentional seed reset is required.',
       },
     };
   }

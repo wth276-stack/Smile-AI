@@ -69,7 +69,8 @@ const INDUSTRY_CONFIG: Record<string, IndustryConfig> = {
   },
 };
 
-const TAB_ORDER = ['beauty', 'cleaning', 'renovation', 'consulting', 'yoga'] as const;
+/** Phase 2A MVP demos only; renovation/consulting remain in INDUSTRY_CONFIG for reuse but are hidden here. */
+const TAB_ORDER = ['beauty', 'cleaning', 'yoga'] as const;
 
 export default function HeroChatMultiIndustry() {
   const [currentIndustry, setCurrentIndustry] = useState<string>('beauty');

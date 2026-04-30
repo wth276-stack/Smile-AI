@@ -234,6 +234,91 @@ function ensureAssistantJson(content: string): string {
   // 純文字 → 包成 JSON 格式，等 model 保持 JSON 輸出
   return JSON.stringify({ reply: content, intent: 'REPLY', action: 'REPLY' });
 }
+
+function stripEmoji(text: string): string {
+  return text
+    .replace(/\p{Extended_Pictographic}/gu, '')
+    .replace(/\uFE0F/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+function compactBookingReply(
+  action: string,
+  draft: BookingDraft,
+  newSlots: Partial<BookingDraft>,
+): string | null {
+  const preferNewSlots = draft.mode === 'modify' || action === 'MODIFY_BOOKING';
+  const service =
+    (preferNewSlots && (newSlots.serviceDisplayName?.trim() || newSlots.serviceName?.trim())) ||
+    draft.serviceDisplayName?.trim() ||
+    draft.serviceName?.trim();
+  const date = (preferNewSlots && newSlots.date?.trim()) || draft.date?.trim();
+  const time = (preferNewSlots && newSlots.time?.trim()) || draft.time?.trim();
+  const name = (preferNewSlots && newSlots.customerName?.trim()) || draft.customerName?.trim();
+  const phone = (preferNewSlots && newSlots.phone?.trim()) || draft.phone?.trim();
+
+  if (action === 'CONFIRM_BOOKING' && service && date && time && name && phone) {
+    const title =
+      draft.mode === 'cancel'
+        ? '取消確認'
+        : draft.mode === 'modify'
+          ? '改期確認'
+          : '預約確認';
+    const question = draft.mode === 'cancel' ? '請確認是否取消？' : '請確認是否正確？';
+    return [
+      `${title}：${service}`,
+      `日期時間：${date} ${time}`,
+      `姓名：${name}`,
+      `電話：${phone}`,
+      question,
+    ].join('\n');
+  }
+
+  if (action === 'SUBMIT_BOOKING') {
+    return service && date && time
+      ? `預約已成功提交：${service}，${date} ${time}。`
+      : '預約已成功提交。';
+  }
+
+  if (action === 'MODIFY_BOOKING') {
+    return date && time ? `預約已成功改為 ${date} ${time}。` : '預約已成功修改。';
+  }
+
+  if (action === 'CANCEL_BOOKING') {
+    return '預約已成功取消。';
+  }
+
+  return null;
+}
+
+function extractReplyDateTime(reply: string): { date?: string; time?: string } {
+  const out: { date?: string; time?: string } = {};
+  const dateMatch =
+    reply.match(/(\d{4})-(\d{1,2})-(\d{1,2})/) ??
+    reply.match(/(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日/);
+  if (dateMatch) {
+    out.date = `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}`;
+  }
+
+  const colonTime = reply.match(/\b(\d{1,2}):(\d{2})\b/);
+  if (colonTime) {
+    out.time = `${colonTime[1].padStart(2, '0')}:${colonTime[2]}`;
+    return out;
+  }
+
+  const hourMatch = reply.match(/(上午|早上|下午|下晝|晚上|夜晚)?\s*(\d{1,2})點/);
+  if (hourMatch) {
+    let hour = Number.parseInt(hourMatch[2], 10);
+    const meridiem = hourMatch[1] ?? '';
+    if (/(下午|下晝|晚上|夜晚)/.test(meridiem) && hour < 12) hour += 12;
+    if (/(上午|早上)/.test(meridiem) && hour === 12) hour = 0;
+    out.time = `${String(hour).padStart(2, '0')}:00`;
+  }
+
+  return out;
+}
+
 function readSettingString(
   settings: Record<string, unknown>,
   ...keys: string[]
@@ -971,6 +1056,17 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
 
     // ── Robust guard: no confirmation-summary wording until all required slots exist ──
     let finalReply = validated.validatedReply;
+    if (finalMergedDraft.mode === 'modify') {
+      const proposed = extractReplyDateTime(finalReply);
+      if (proposed.date) {
+        finalMergedDraft.date = proposed.date;
+        finalNewSlots.date = proposed.date;
+      }
+      if (proposed.time) {
+        finalMergedDraft.time = proposed.time;
+        finalNewSlots.time = proposed.time;
+      }
+    }
     {
       const prematureConfirm =
         missingSlots.length > 0 &&
@@ -1031,6 +1127,19 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
       if (boundary.usedTemplate) {
         console.warn('[v2/engine] Confirmation boundary (Case 3): deterministic summary + CONFIRM_BOOKING');
       }
+    }
+
+    if (
+      (finalAction === 'REPLY' || finalAction === 'REPLY_ONLY' || finalAction === 'COLLECT_BOOKING') &&
+      (finalMergedDraft.mode === 'modify' || finalMergedDraft.mode === 'cancel') &&
+      !!String(finalMergedDraft.bookingId ?? '').trim() &&
+      bookingDraftHasAllRequiredSlots(finalMergedDraft) &&
+      replyHasConfirmationSummary(finalReply)
+    ) {
+      finalAction = 'CONFIRM_BOOKING';
+      console.warn(
+        '[v2/engine] Override: modify/cancel confirmation summary -> CONFIRM_BOOKING',
+      );
     }
 
     // ── Ambiguous bare-hour resolution ──
@@ -1108,6 +1217,9 @@ export async function runAiEngineV2(input: AiEngineInput): Promise<AiEngineResul
         });
       }
     }
+
+    finalReply = compactBookingReply(finalAction, finalMergedDraft, finalNewSlots) ?? finalReply;
+    finalReply = stripEmoji(finalReply);
 
     const finalLegacyAction = mapActionToLegacy(finalAction);
 

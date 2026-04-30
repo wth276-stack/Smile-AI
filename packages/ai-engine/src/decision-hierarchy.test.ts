@@ -77,17 +77,20 @@ describe('Business Rules Override Signals', () => {
   });
 
   it('should reject same-day booking after cutoff regardless of emotion', () => {
-    // Customer is happy and ready
-    // But tries to book same-day after 14:00 cutoff
-    const today = new Date();
-    const dateStr = today.toISOString().split('T')[0]; // Today
-
+    // Deterministic local calendar (avoid UTC `toISOString()` vs validator local date mismatch)
+    const dateStr = '2026-06-10';
     const draft = createDraftWithDate(dateStr, '15:00'); // 3 PM
 
-    const validation = validateBookingRules(draft, {
-      ...DEFAULT_BUSINESS_HOURS,
-      sameDayCutoffHour: 14, // Cutoff at 14:00
-    });
+    const now = new Date(2026, 5, 10, 15, 30, 0); // Same day after 14:00 cutoff
+
+    const validation = validateBookingRules(
+      draft,
+      {
+        ...DEFAULT_BUSINESS_HOURS,
+        sameDayCutoffHour: 14,
+      },
+      now,
+    );
 
     expect(validation.valid).toBe(false);
     // Note: same_day_cutoff and outside_hours share similar logic
