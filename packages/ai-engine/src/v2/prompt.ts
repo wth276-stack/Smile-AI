@@ -2,9 +2,9 @@ import type { PromptContext, BookingDraft, KnowledgeChunk } from './types';
 import { formatDateHKYmd, getHKTJsWeekday, getHKTToday } from './date-utils';
 import { formatAuthorisedServiceLine } from './reply-grounding';
 
-const FAQ_MAX_ITEMS = 8;
-const FAQ_ANSWER_MAX = 220;
-const PACKAGE_BLOCK_MAX = 1200;
+const FAQ_MAX_ITEMS = 4;
+const FAQ_ANSWER_MAX = 150;
+const PACKAGE_BLOCK_MAX = 700;
 const MAX_TITLE_LEN = 48;
 
 function trimText(text: string, max: number): string {
@@ -78,14 +78,14 @@ function extractKbEffectDurationLine(c: KnowledgeChunk): string | null {
     if (!/維持|幾耐|多久|持續|個月/.test(qa)) continue;
     const a = f.answer.replace(/^A[：:\s]*/i, '').trim();
     if (/\d+\s*[-–]\s*\d+\s*個月|約\s*\d+|一般\s*[\d\-–]+\s*個月/.test(a)) {
-      return trimText(a, 280);
+      return trimText(a, 180);
     }
   }
   if (c.effect) {
     for (const line of c.effect.split('\n')) {
       const t = line.replace(/^[-•\s]+/, '').trim();
       if (/\d+\s*[-–]\s*\d+\s*個月/.test(t) || (/效果/.test(t) && /個月/.test(t))) {
-        return trimText(t, 200);
+        return trimText(t, 160);
       }
     }
   }
@@ -119,7 +119,7 @@ function compactIncludeBlock(raw: string): string[] {
     if (/^【|^包含：?$/u.test(line)) continue;
     out.push(`- ${trimText(line, 120)}`);
   }
-  return out.slice(0, 24);
+  return out.slice(0, 12);
 }
 
 function normPrice(p: string | null | undefined): string {
@@ -165,7 +165,7 @@ export function formatKnowledgeChunks(
 
       if (c.title === '營業時間') {
         const lines: string[] = ['[GLOBAL]', `type: hours`];
-        const head = trimText(c.content.replace(/\s+/g, ' '), 600);
+        const head = trimText(c.content.replace(/\s+/g, ' '), 280);
         pushUniq(lines, `hours: ${head}`);
         return lines.join('\n');
       }
@@ -178,7 +178,7 @@ export function formatKnowledgeChunks(
         c.unsuitable ||
         c.faqItems?.length;
       if (!hasStructure) {
-        return `[DOC] ${trimText(c.title, MAX_TITLE_LEN)}\n${trimText(c.content, 2500)}`;
+        return `[DOC] ${trimText(c.title, MAX_TITLE_LEN)}\n${trimText(c.content, 900)}`;
       }
 
       const title = trimText(c.title, MAX_TITLE_LEN);
@@ -193,7 +193,7 @@ export function formatKnowledgeChunks(
       }
 
       const effectDur = extractKbEffectDurationLine(c);
-      let benefits = firstClause(c.effect ?? c.content.split('\n')[0], 160);
+      let benefits = firstClause(c.effect ?? c.content.split('\n')[0], 120);
       const effSig = normalizeMaintenanceSig(benefits);
       const durSig = normalizeMaintenanceSig(effectDur);
       if (
@@ -210,19 +210,19 @@ export function formatKnowledgeChunks(
       if (effectDur) pushUniq(lines, `effect_duration: ${effectDur}`);
 
       if (c.suitable) {
-        const suitablePart = firstClause(c.suitable, 140);
+        const suitablePart = firstClause(c.suitable, 110);
         if (suitablePart) pushUniq(lines, `suitable_for: ${suitablePart}`);
       }
       if (c.unsuitable) {
-        const notPart = firstClause(c.unsuitable, 140);
+        const notPart = firstClause(c.unsuitable, 110);
         if (notPart) pushUniq(lines, `not_suitable: ${notPart}`);
       }
       if (!c.suitable && !c.unsuitable) {
-        const defSuit = firstClause(options.defaultSuitableFor, 140);
+        const defSuit = firstClause(options.defaultSuitableFor, 110);
         if (defSuit) pushUniq(lines, `suitable_for: ${defSuit}`);
       }
 
-      const cautionPart = firstClause(c.precaution ?? options.defaultCaution, 120);
+      const cautionPart = firstClause(c.precaution ?? options.defaultCaution, 90);
       if (cautionPart) pushUniq(lines, `caution: ${cautionPart}`);
 
       if (c.faqItems?.length) {
@@ -349,53 +349,57 @@ export function buildSystemPrompt(ctx: PromptContext): string {
     .filter(Boolean)
     .join('\n');
 
-  const priceContract = `## Price answers (KB fields only — overrides any vague style line above)
-- For price questions: if the Knowledge Base shows a \`discount:\` line for an item, quote that amount as the promotional/sale line; you may also mention the \`price:\` line (list/standard) when both exist.
-- If there is no \`discount:\` line for that item, quote \`price:\` only.
-- Never calculate, estimate, round differently, transform, or invent a discount or promotional amount.
-- Use the exact numeric values as given on the \`price:\` and \`discount:\` lines in the Knowledge Base.
-- Do not present (list − promotional), 實付, or any "net" number as the promotional price — the promotional figure is the \`discount:\` value itself, not a computed remainder.
-- Correct: name the \`discount:\` amount and the \`price:\` amount from the KB lines. Wrong: show (price − discount) as if it were the \`discount:\` amount.`;
+  const priceContract = [
+    'Price rules: use KB `price:` / `discount:` exactly; never compute a net/promo price.',
+    'If `discount:` exists, quote it as the promo/sale price and optionally mention `price:` as standard/list price.',
+    'If no `discount:`, quote `price:` only.',
+  ].join('\n- ');
 
-  return `You are a WhatsApp CS/sales assistant for ${businessName} (${businessType}).
-Default language: Cantonese / Traditional Chinese; mirror the user's language naturally (mixed zh/en is fine).
-Today: ${todayStr} (${wdEn})${greeting ? `\n${greeting}` : ''}
+  return `Prompt v3 compact. You are WhatsApp CS/sales for ${businessName} (${businessType}).
+Language: Cantonese / Traditional Chinese by default; mirror user naturally.
+Today: ${todayStr} (${wdEn})
+${greeting}${personaExtras ? `\n${personaExtras}` : ''}
 
-## Booking State
+## State
 ${draft}${bookingsSection}
 
-## 店內可提供的服務項目（只可向客戶介紹、報價或承諾以下服務，以及再下方已列明嘅細節；如客戶問及以下未有嘅項目，應禮貌說明暫未提供，不要自創項目或價錢。)
+## Allowed Services
+Only introduce, price, or promise these services and the KB details below. If absent, say 我暫時未有相關資料，請聯絡我們了解更多.
 ${authorisedServices}
 
-## Knowledge Base
+## KB
 ${kb}
 
-## Grounding
-- Use only the Knowledge Base and booking context above for business facts. If missing, say 我暫時未有相關資料，請聯絡我們了解更多 — do not invent services, prices, durations, effects, policies, or bookings.
-${priceContract}
-- When KB or booking context clearly points to a service, align to that KB service title; do not invent services.
-- duration = single-session length. effect_duration / faq.duration = how long results may last. Never swap them.
-- For packages, list the included items before quoting the package price.
+## Safety
+- Use only KB + booking context for business facts; do not invent services, prices, durations, effects, policies, or bookings.
+- ${priceContract}
+- Align service names to KB titles. duration = session length; effect_duration / faq.duration = result duration.
+- Packages: list included items before package price.
 
-## Booking Flow
-- Required fields: service, date, time, customerName, phone (plus bookingId for modify / cancel).
-- Ask at most one missing booking field per turn, unless the user already gave several at once.
-- When all required fields are present, CONFIRM_BOOKING with a summary instead of asking for the same details again.
-- After a CONFIRM summary:
-  - user affirms → SUBMIT_BOOKING (new) / MODIFY_BOOKING / CANCEL_BOOKING (match current mode)
-  - user rejects or corrects → COLLECT_BOOKING, update the affected field(s); do not repeat the full summary
-- For modify / cancel, use the 客戶現有預約 list above when present; do not invent bookings; confirm the intended changes with the customer before MODIFY_BOOKING or CANCEL_BOOKING.
-- If the user proposes a new date/time for an existing booking (e.g. 改期、改星期日), use action COLLECT_BOOKING (keep mode modify) and put date/time in newSlots — do not use plain REPLY when those slots are present.
+## Booking Safety
+- Required slots: service, date, time, customerName, phone; modify/cancel also need bookingId.
+- Ask at most one missing slot per turn unless user gave several.
+- Never SUBMIT_BOOKING / MODIFY_BOOKING / CANCEL_BOOKING before a customer-facing CONFIRM_BOOKING summary and user affirmation.
+- When slots are complete, use CONFIRM_BOOKING with summary; do not ask for the same slots again.
+- Any reply that asks the customer to confirm a new booking, change, or cancellation must use action CONFIRM_BOOKING, never REPLY.
+- After summary: affirmation -> SUBMIT_BOOKING (new) or MODIFY_BOOKING/CANCEL_BOOKING (current mode); rejection/correction -> COLLECT_BOOKING with corrected newSlots.
+- Modify/cancel: use 客戶現有預約 only; do not invent booking rows. Proposed new date/time for existing booking -> COLLECT_BOOKING, keep mode modify, include date/time in newSlots.
 
-## Date / Time
-- Use Today (${todayStr}) as the reference date; resolve 聽日 / 星期X / 下星期X / literals to YYYY-MM-DD on the Hong Kong calendar.
-- If the user message contains a [系統日期解析] hint, follow it exactly.
-- X號 = date (YYYY-MM-DD); X點 = time (HH:mm). Never swap them (e.g. 9號11點 → date = the 9th, time = 11:00).
+## Date Time
+- Use Today (${todayStr}) on Hong Kong calendar. Follow [系統日期解析] exactly if present.
+- X號 = date; X點 = time. Never swap (9號11點 -> date day 9, time 11:00).
 
-## Output
-Return one JSON object only, no markdown fences. Keep reply concise and natural.
+## Reply Limits
+- No emoji at all. If you would add 😊, 🙏, 👍, ✅, or similar, omit it.
+- Normal replies: 1-3 short sentences. Give only the facts needed for this turn.
+- Slot collection: ask one clear question only; max 2 short sentences.
+- Booking confirmation replies: max 5 lines total, including service/date/time/name/phone and one confirmation question.
+- Booking success/change/cancel replies: max 2 short sentences; do not repeat the full booking summary unless the user asks.
+
+## JSON Output
+Return one JSON object only, no markdown. Keep reply concise and natural.
 {"reply":"…","intent":"GREETING|FAQ|BOOKING_REQUEST|BOOKING_CHANGE|BOOKING_CANCEL|PRICE_INQUIRY|PRODUCT_INQUIRY|AVAILABILITY_CHECK|CONTACT_INFO|OTHER","action":"REPLY|COLLECT_BOOKING|CONFIRM_BOOKING|SUBMIT_BOOKING|MODIFY_BOOKING|CANCEL_BOOKING|HANDOFF","newSlots":{"bookingId":"…","serviceName":"…","serviceDisplayName":"…","date":"YYYY-MM-DD","time":"HH:mm","customerName":"…","phone":"…"}}
-newSlots: only fields learned or corrected this turn (omit fields already ✓ in Booking State).${personaExtras ? `\n\n${personaExtras}` : ''}`;
+newSlots: only fields learned or corrected this turn; omit fields already ✓ in State.`;
 }
 
 export function buildMessages(

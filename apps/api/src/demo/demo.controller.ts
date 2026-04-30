@@ -22,7 +22,9 @@ export class DemoController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(DemoAdminTokenGuard)
   reset(@Body() dto: ResetDemoDto) {
-    return this.demo.resetDemo(dto.industryId, dto.conversationId);
+    return this.demo.resetDemo(dto.industryId, dto.conversationId, {
+      resetKnowledgeBase: dto.resetKnowledgeBase === true,
+    });
   }
 
   /**
